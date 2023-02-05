@@ -65,6 +65,7 @@ class Cache:
         expire = now + self.ttl
         exist = key in self._cache
         self._cache[key] = CachedValue(value, expire)
+        self._cache.move_to_end(key)
         with self.lock:
             if self.wait_expire == -1:
                 self.wait_expire = now + self.ttl + 0.01
