@@ -2,7 +2,8 @@ import math
 import time
 from datetime import timedelta
 from collections import OrderedDict
-from typing import Any, Hashable, NamedTuple, Optional, Dict, Protocol, Type
+from typing import Any, Hashable, NamedTuple, Optional, Dict, Type
+from typing_extensions import Protocol
 from cacheme_utils import Lru, TinyLfu
 from threading import Lock
 
