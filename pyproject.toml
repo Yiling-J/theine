@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "theine"
+version = "0.1.0"
+description = "high performance in-memory cache"
+authors = ["Yiling-J <njjyl723@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+cacheme-utils = "^0.1.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.1"
+pytest-benchmark = "^4.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
