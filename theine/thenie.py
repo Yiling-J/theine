@@ -1,7 +1,6 @@
 import math
 import time
 from datetime import timedelta
-from collections import OrderedDict
 from typing import Any, Hashable, Optional, Dict, Type, cast
 from typing_extensions import Protocol
 from cacheme_utils import Lru, TinyLfu
@@ -34,7 +33,7 @@ POLICIES: Dict[str, Type[Policy]] = {
 
 class Cache:
     def __init__(self, policy: str, size: int, timer: str = ""):
-        self._cache: OrderedDict[Hashable, CachedValue] = OrderedDict()
+        self._cache: Dict[Hashable, CachedValue] = {}
         self.policy = POLICIES[policy](size)
         self.timer = FakeTimer()
         if timer == "bucket":
@@ -60,7 +59,6 @@ class Cache:
         exist = key in self._cache
         v = CachedValue(value, expire)
         self._cache[key] = v
-        self._cache.move_to_end(key)
         if ts != math.inf:
             self.timer.set(key, v, ts)
             expired = self.timer.expire(ts, now)
