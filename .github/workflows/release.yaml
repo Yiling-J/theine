@@ -1,0 +1,41 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  publish:
+    name: "Publish release"
+    runs-on: "ubuntu-latest"
+
+    environment:
+      name: deploy
+
+    steps:
+      - uses: "actions/checkout@v3"
+      - uses: "actions/setup-python@v4"
+        with:
+          python-version: '3.10'
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v2
+        with:
+          version: 1.3
+      - name: Setup Poetry
+        run: "poetry config virtualenvs.in-project true"
+      - name: Cache Deps
+        uses: actions/cache@v2
+        id: cached-poetry-dependencies
+        with:
+          path: .venv
+          key: python-3.10-pydeps-${{ hashFiles('**/poetry.lock') }}
+      - name: "Install Dependencies"
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: "poetry install --no-interaction --no-root"
+      - name: "Build Package"
+        run: "poetry build"
+      - name: "Publish to PyPI"
+        run: "poetry publish"
+        env:
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
