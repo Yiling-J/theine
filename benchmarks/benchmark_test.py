@@ -11,7 +11,7 @@ REQUESTS = 10000
 
 def write_keys(cache: Cache, keys: List[str]):
     for key in keys:
-        cache.set(key, key)
+        cache.set(key, key, ttl=timedelta(seconds=10))
 
 
 def read_keys(cache: Cache, keys: List[str]):
@@ -26,7 +26,7 @@ def read_keys(cache: Cache, keys: List[str]):
 
 def test_write(benchmark):
     z = Zipf(1.0001, 10, REQUESTS // 10)
-    cache = Cache(policy="tlfu", size=REQUESTS // 10, ttl=timedelta(seconds=20))
+    cache = Cache(policy="tlfu", size=REQUESTS // 10, timer="bucket")
 
     def setup():
         _uuid = uuid.uuid4().int
@@ -41,7 +41,7 @@ def test_write(benchmark):
 
 def test_read(benchmark):
     z = Zipf(1.0001, 10, REQUESTS // 10)
-    cache = Cache(policy="tlfu", size=REQUESTS // 10)
+    cache = Cache(policy="tlfu", size=REQUESTS // 10, timer="bucket")
     keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
     assert len(set(keys)) > 900
     write_keys(cache, keys)
