@@ -76,7 +76,7 @@ class Cache:
 
     def delete(self, key) -> bool:
         v = self._cache.pop(key, sentinel)
-        if v != sentinel:
+        if v is not sentinel:
             self.core.remove(key)
             return True
         return False
