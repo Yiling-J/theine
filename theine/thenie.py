@@ -1,21 +1,26 @@
 import math
 import time
 from datetime import timedelta
-from typing import Any, Hashable, Optional, Dict, Type, cast
+from threading import Thread
+from typing import Any, Hashable, Optional, Dict, Type
 from typing_extensions import Protocol
-from cacheme_utils import Lru, TinyLfu
+from theine_core import LruCore, TlfuCore
 from theine.models import CachedValue
-
-from theine.ttl import BucketTimer, FakeTimer
 
 sentinel = object()
 
 
-class Policy(Protocol):
+class Core(Protocol):
     def __init__(self, size: int):
         ...
 
-    def set(self, key: str) -> Optional[str]:
+    def schedule(self, key: str, expire: int):
+        ...
+
+    def set_policy(self, key: str) -> Optional[str]:
+        ...
+
+    def set(self, key: str, expire: int) -> Optional[str]:
         ...
 
     def remove(self, key: str):
@@ -24,26 +29,28 @@ class Policy(Protocol):
     def access(self, key: str):
         ...
 
+    def advance(self, now: int, cache: dict):
+        ...
 
-POLICIES: Dict[str, Type[Policy]] = {
-    "tlfu": TinyLfu,
-    "lru": Lru,
+
+CORES: Dict[str, Type[Core]] = {
+    "tlfu": TlfuCore,
+    "lru": LruCore,
 }
 
 
 class Cache:
-    def __init__(self, policy: str, size: int, timer: str = ""):
+    def __init__(self, policy: str, size: int):
         self._cache: Dict[Hashable, CachedValue] = {}
-        self.policy = POLICIES[policy](size)
-        self.timer = FakeTimer()
-        if timer == "bucket":
-            self.timer = BucketTimer()
+        self.core = CORES[policy](size)
+        self.maintainer = Thread(target=self.maintenance, daemon=True)
+        self.maintainer.start()
 
     def __len__(self) -> int:
         return len(self._cache)
 
     def get(self, key: str, default: Any = None) -> Any:
-        self.policy.access(key)
+        self.core.access(key)
         cached = self._cache.get(key)
         if cached is None:
             return default
@@ -54,26 +61,27 @@ class Cache:
 
     def set(self, key: str, value: Any, ttl: Optional[timedelta] = None):
         now = time.time()
-        ts = ttl.total_seconds() if ttl else math.inf
+        ts = max(ttl.total_seconds(), 1.0) if ttl is not None else math.inf
         expire = now + ts
         exist = key in self._cache
         v = CachedValue(value, expire)
         self._cache[key] = v
-        if ts != math.inf:
-            self.timer.set(key, v, ts)
-            expired = self.timer.expire(ts, now)
-            for key in expired:
-                self._cache.pop(key, None)
-                self.policy.remove(key)
+        if expire != math.inf:
+            self.core.schedule(key, int(expire * 1e9))
         if exist:
             return
-        evicated = self.policy.set(key)
+        evicated = self.core.set_policy(key)
         if evicated is not None:
             self._cache.pop(evicated, None)
 
     def delete(self, key) -> bool:
         v = self._cache.pop(key, sentinel)
         if v != sentinel:
-            self.timer.delete(key, cast(CachedValue, v))
+            self.core.remove(key)
             return True
         return False
+
+    def maintenance(self):
+        while True:
+            self.core.advance(time.time_ns(), self._cache)
+            time.sleep(0.5)
