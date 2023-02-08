@@ -1,6 +1,14 @@
 # theine
 high performance in-memory cache
 
+## Requirements
+Python 3.7+
+
+## Installation
+```
+pip install theine
+```
+
 ## API
 
 ```Python
