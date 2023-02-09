@@ -30,7 +30,7 @@ v = cache.get("key")
 
 # with default, return default on miss
 sentinel = object()
-v = cache.get(key, sentinel)
+v = cache.get("key", sentinel)
 
 # set with ttl
 cache.set("key", {"foo": "bar"}, timedelta(seconds=100))
