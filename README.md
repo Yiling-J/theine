@@ -1,11 +1,11 @@
 # theine
-high performance in-memory cache
+High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
 
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
 - High hit ratio with [W-TinyLFU evication policy](https://arxiv.org/pdf/1512.00727.pdf)
-- Expired Data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
+- Expired data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
 - Simple API
-- Django Cache Backend
+- Django cache backend
 
 ## Benchmarks
 https://github.com/Yiling-J/cacheme-benchmark
