@@ -1,4 +1,4 @@
-# theine
+# Theine
 High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
 
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
