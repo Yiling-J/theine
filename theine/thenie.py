@@ -2,7 +2,7 @@ import math
 import time
 from datetime import timedelta
 from threading import Thread
-from typing import Any, Hashable, Optional, Dict, Type
+from typing import Any, Hashable, Optional, Dict, Type, cast
 from typing_extensions import Protocol
 from theine_core import LruCore, TlfuCore
 from theine.models import CachedValue
@@ -15,6 +15,9 @@ class Core(Protocol):
         ...
 
     def schedule(self, key: str, expire: int):
+        ...
+
+    def deschedule(self, key: str):
         ...
 
     def set_policy(self, key: str) -> Optional[str]:
@@ -51,13 +54,13 @@ class Cache:
 
     def get(self, key: str, default: Any = None) -> Any:
         self.core.access(key)
-        cached = self._cache.get(key)
-        if cached is None:
+        cached = self._cache.get(key, sentinel)
+        if cached is sentinel:
             return default
-        elif cached.expire < time.time():
+        elif cast(CachedValue, cached).expire < time.time():
             self.delete(key)
             return default
-        return cached.data
+        return cast(CachedValue, cached).data
 
     def set(self, key: str, value: Any, ttl: Optional[timedelta] = None):
         now = time.time()
@@ -68,13 +71,15 @@ class Cache:
         self._cache[key] = v
         if expire != math.inf:
             self.core.schedule(key, int(expire * 1e9))
+        else:
+            self.core.deschedule(key)
         if exist:
             return
         evicated = self.core.set_policy(key)
         if evicated is not None:
             self._cache.pop(evicated, None)
 
-    def delete(self, key) -> bool:
+    def delete(self, key: str) -> bool:
         v = self._cache.pop(key, sentinel)
         if v is not sentinel:
             self.core.remove(key)
