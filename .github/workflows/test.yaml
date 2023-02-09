@@ -37,7 +37,7 @@ jobs:
           key: python-${{ matrix.python-version }}-pydeps-${{ hashFiles('**/poetry.lock') }}
       - name: "Install Dependencies"
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: "poetry install --no-interaction --no-root -vvv"
+        run: "poetry install --no-interaction --no-root"
       - name: "Run Tests"
         env:
           CI: "TRUE"
