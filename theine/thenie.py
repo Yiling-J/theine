@@ -75,9 +75,9 @@ class Cache:
             self.core.deschedule(key)
         if exist:
             return
-        evicated = self.core.set_policy(key)
-        if evicated is not None:
-            self._cache.pop(evicated, None)
+        evicted = self.core.set_policy(key)
+        if evicted is not None:
+            self._cache.pop(evicted, None)
 
     def delete(self, key: str) -> bool:
         v = self._cache.pop(key, sentinel)
