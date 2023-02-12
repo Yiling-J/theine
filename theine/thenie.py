@@ -1,11 +1,14 @@
+from dataclasses import dataclass
 import math
 import time
+import inspect
 from datetime import timedelta
-from threading import Thread
-from typing import Any, Hashable, Optional, Dict, Type, cast
-from typing_extensions import Protocol
+from threading import Event, Thread
+from typing import Any, Callable, Hashable, Optional, Dict, Type, cast, Generic, TypeVar
+from typing_extensions import Protocol, ParamSpec, Self
 from theine_core import LruCore, TlfuCore
 from theine.models import CachedValue
+from functools import update_wrapper
 
 sentinel = object()
 
@@ -41,6 +44,60 @@ CORES: Dict[str, Type[Core]] = {
     "lru": LruCore,
 }
 
+P = ParamSpec("P")
+R = TypeVar("R")
+_unset = object()
+
+
+@dataclass
+class EventData:
+    event: Event
+    data: Any
+
+
+# https://github.com/python/cpython/issues/90780
+class CachedAwaitable:
+    def __init__(self, awaitable):
+        self.awaitable = awaitable
+        self.result = _unset
+
+    def __await__(self):
+        if self.result is _unset:
+            self.result = yield from self.awaitable.__await__()
+        return self.result
+
+
+class Wrapper(Generic[P, R]):
+    def __init__(self, fn: Callable[P, R], cache: "Cache", coro: bool):
+        self.func = fn
+        self.cache = cache
+        self.events: Dict[str, EventData] = {}
+        self.coro = coro
+        update_wrapper(self, fn)
+
+    def key(self, fn: Callable[P, str]) -> Self:
+        self.key_func = fn
+        return self
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+        key = self.key_func(*args, **kwargs)
+        sentinel = object()
+        result = self.cache.get(key, sentinel)
+        if result is sentinel:
+            event = EventData(Event(), None)
+            exist = self.events.setdefault(key, event)
+            if event is exist:
+                result = self.func(*args, **kwargs)
+                if self.coro:
+                    result = CachedAwaitable(result)
+                self.cache.set(key, result)
+                event.event.set()
+                self.events.pop(key, None)
+            else:
+                event.event.wait()
+                result = self.cache.get(key, event.data)
+        return cast(R, result)
+
 
 class Cache:
     def __init__(self, policy: str, size: int):
@@ -51,6 +108,10 @@ class Cache:
 
     def __len__(self) -> int:
         return len(self._cache)
+
+    def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
+        coro = inspect.iscoroutinefunction(fn)
+        return Wrapper(fn, self, coro)
 
     def get(self, key: str, default: Any = None) -> Any:
         self.core.access(key)
