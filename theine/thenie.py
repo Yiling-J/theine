@@ -1,11 +1,23 @@
 from dataclasses import dataclass
 import math
 import time
+import types
 import inspect
 from datetime import timedelta
 from threading import Event, Thread
-from typing import Any, Callable, Hashable, Optional, Dict, Type, cast, Generic, TypeVar
-from typing_extensions import Protocol, ParamSpec, Self
+from typing import (
+    Any,
+    Callable,
+    Hashable,
+    Optional,
+    Dict,
+    Type,
+    cast,
+    Generic,
+    TypeVar,
+    overload,
+)
+from typing_extensions import Protocol, ParamSpec, Self, Concatenate
 from theine_core import LruCore, TlfuCore
 from theine.models import CachedValue
 from functools import update_wrapper
@@ -46,6 +58,7 @@ CORES: Dict[str, Type[Core]] = {
 
 P = ParamSpec("P")
 R = TypeVar("R")
+F = TypeVar("F")
 _unset = object()
 
 
@@ -67,10 +80,10 @@ class CachedAwaitable:
         return self.result
 
 
-class Wrapper(Generic[P, R]):
+class Wrapper(Generic[F, P, R]):
     def __init__(
         self,
-        fn: Callable[P, R],
+        fn: Callable[Concatenate[F, P], R],
         timeout: Optional[timedelta],
         cache: "Cache",
         coro: bool,
@@ -82,23 +95,23 @@ class Wrapper(Generic[P, R]):
         self.timeout = timeout
         update_wrapper(self, fn)
 
-    def key(self, fn: Callable[P, str]) -> Self:
+    def key(self, fn: Callable[Concatenate[F, P], str]) -> Self:
         self.key_func = fn
         return self
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        key = self.key_func(*args, **kwargs)
+    def __call__(self, F, *args: P.args, **kwargs: P.kwargs) -> R:
+        key = self.key_func(F, *args, **kwargs)
         sentinel = object()
         result = self.cache.get(key, sentinel)
         if result is sentinel:
             if self.coro:
-                result = CachedAwaitable(self.func(*args, **kwargs))
+                result = CachedAwaitable(self.func(F, *args, **kwargs))
                 self.cache.set(key, result, self.timeout)
             else:
                 event = EventData(Event(), None)
                 exist = self.events.setdefault(key, event)
                 if event is exist:
-                    result = self.func(*args, **kwargs)
+                    result = self.func(F, *args, **kwargs)
                     self.cache.set(key, result, self.timeout)
                     event.event.set()
                     self.events.pop(key, None)
@@ -107,13 +120,26 @@ class Wrapper(Generic[P, R]):
                     result = self.cache.get(key, event.data)
         return cast(R, result)
 
+    @overload
+    def __get__(self, instance, owner) -> Callable[P, R]:
+        ...
+
+    @overload
+    def __get__(self, instance, owner) -> Self:  # type: ignore
+        ...
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return cast(Callable[P, R], types.MethodType(self, instance))
+
 
 class Memoize:
     def __init__(self, cache: "Cache", timeout: Optional[timedelta]):
         self.cache = cache
         self.timeout = timeout
 
-    def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
+    def __call__(self, fn: Callable[Concatenate[F, P], R]) -> Wrapper[F, P, R]:
         coro = inspect.iscoroutinefunction(fn)
         return Wrapper(fn, self.timeout, self.cache, coro)
 

@@ -84,3 +84,42 @@ async def test_async_decorator():
     assert mock.call_count == 6
     ints = [i[0][0] for i in mock.call_args_list]
     assert set(ints) == {0, 1, 2, 3, 4, 5}
+
+
+def test_instance_method_sync():
+    mock = Mock()
+    threads: List[Thread] = []
+    bar = Bar()
+    assert bar.foo.__name__ == "foo"  # type: ignore
+
+    def assert_id(id: int, m: Mock):
+        assert bar.foo(id, m)["id"] == id
+
+    for _ in range(500):
+        t = Thread(target=assert_id, args=[randint(0, 5), mock])
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    assert mock.call_count == 6
+    ints = [i[0][0] for i in mock.call_args_list]
+    assert set(ints) == {0, 1, 2, 3, 4, 5}
+
+
+@pytest.mark.asyncio
+async def test_instance_method_async():
+    mock = Mock()
+    bar = Bar()
+    assert bar.async_foo.__name__ == "async_foo"  # type: ignore
+
+    async def assert_id(id: int, m: Mock):
+        data = await bar.async_foo(id, m)
+        assert data["id"] == id
+
+    await asyncio.gather(*[assert_id(randint(0, 5), mock) for _ in range(500)])
+
+    assert mock.call_count == 6
+    ints = [i[0][0] for i in mock.call_args_list]
+    assert set(ints) == {0, 1, 2, 3, 4, 5}
