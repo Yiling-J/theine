@@ -1,6 +1,6 @@
 import asyncio
 import pytest
-from typing import Dict, List
+from typing import Dict, List, Any
 from unittest.mock import Mock
 from threading import Thread
 from random import randint
@@ -16,6 +16,16 @@ def foo(id: int, m: Mock) -> Dict:
 @foo.key
 def _(id: int, m: Mock) -> str:
     return f"id-{id}"
+
+
+@Memoize(Cache("tlfu", 1000), None)
+def foo_empty() -> Dict:
+    return {"id": id}
+
+
+@foo_empty.key
+def _() -> str:
+    return "empty"
 
 
 @Memoize(Cache("tlfu", 1000), None)
@@ -46,6 +56,25 @@ class Bar:
 
     @async_foo.key
     def _(self, id: int, m: Mock) -> str:
+        return f"id-{id}"
+
+    @Memoize(Cache("tlfu", 1000), None)
+    def foo_empty(self) -> str:
+        return "empty"
+
+    @foo_empty.key
+    def _(self) -> str:
+        return "empty"
+
+    @Memoize(Cache("tlfu", 1000), None)
+    @classmethod
+    def foo_class(cls, id: int, m: Mock) -> Dict:
+        m(id)
+        return {"id": id}
+
+    @foo_class.key
+    def _(cls: Any, id: int, m: Mock) -> str:
+        m(id)
         return f"id-{id}"
 
 

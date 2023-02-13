@@ -58,7 +58,6 @@ CORES: Dict[str, Type[Core]] = {
 
 P = ParamSpec("P")
 R = TypeVar("R")
-F = TypeVar("F")
 _unset = object()
 
 
@@ -80,10 +79,10 @@ class CachedAwaitable:
         return self.result
 
 
-class Wrapper(Generic[F, P, R]):
+class Wrapper(Generic[P, R]):
     def __init__(
         self,
-        fn: Callable[Concatenate[F, P], R],
+        fn: Callable[P, R],
         timeout: Optional[timedelta],
         cache: "Cache",
         coro: bool,
@@ -95,23 +94,23 @@ class Wrapper(Generic[F, P, R]):
         self.timeout = timeout
         update_wrapper(self, fn)
 
-    def key(self, fn: Callable[Concatenate[F, P], str]) -> Self:
+    def key(self, fn: Callable[P, str]) -> "Wrapper":
         self.key_func = fn
         return self
 
-    def __call__(self, F, *args: P.args, **kwargs: P.kwargs) -> R:
-        key = self.key_func(F, *args, **kwargs)
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+        key = self.key_func(*args, **kwargs)
         sentinel = object()
         result = self.cache.get(key, sentinel)
         if result is sentinel:
             if self.coro:
-                result = CachedAwaitable(self.func(F, *args, **kwargs))
+                result = CachedAwaitable(self.func(*args, **kwargs))
                 self.cache.set(key, result, self.timeout)
             else:
                 event = EventData(Event(), None)
                 exist = self.events.setdefault(key, event)
                 if event is exist:
-                    result = self.func(F, *args, **kwargs)
+                    result = self.func(*args, **kwargs)
                     self.cache.set(key, result, self.timeout)
                     event.event.set()
                     self.events.pop(key, None)
@@ -121,7 +120,7 @@ class Wrapper(Generic[F, P, R]):
         return cast(R, result)
 
     @overload
-    def __get__(self, instance, owner) -> Callable[P, R]:
+    def __get__(self, instance, owner) -> Callable[..., R]:
         ...
 
     @overload
@@ -131,7 +130,7 @@ class Wrapper(Generic[F, P, R]):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return cast(Callable[P, R], types.MethodType(self, instance))
+        return cast(Callable[..., R], types.MethodType(self, instance))
 
 
 class Memoize:
@@ -139,7 +138,7 @@ class Memoize:
         self.cache = cache
         self.timeout = timeout
 
-    def __call__(self, fn: Callable[Concatenate[F, P], R]) -> Wrapper[F, P, R]:
+    def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
         coro = inspect.iscoroutinefunction(fn)
         return Wrapper(fn, self.timeout, self.cache, coro)
 
