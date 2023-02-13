@@ -68,11 +68,18 @@ class CachedAwaitable:
 
 
 class Wrapper(Generic[P, R]):
-    def __init__(self, fn: Callable[P, R], cache: "Cache", coro: bool):
+    def __init__(
+        self,
+        fn: Callable[P, R],
+        timeout: Optional[timedelta],
+        cache: "Cache",
+        coro: bool,
+    ):
         self.func = fn
         self.cache = cache
         self.events: Dict[str, EventData] = {}
         self.coro = coro
+        self.timeout = timeout
         update_wrapper(self, fn)
 
     def key(self, fn: Callable[P, str]) -> Self:
@@ -86,19 +93,29 @@ class Wrapper(Generic[P, R]):
         if result is sentinel:
             if self.coro:
                 result = CachedAwaitable(self.func(*args, **kwargs))
-                self.cache.set(key, result)
+                self.cache.set(key, result, self.timeout)
             else:
                 event = EventData(Event(), None)
                 exist = self.events.setdefault(key, event)
                 if event is exist:
                     result = self.func(*args, **kwargs)
-                    self.cache.set(key, result)
+                    self.cache.set(key, result, self.timeout)
                     event.event.set()
                     self.events.pop(key, None)
                 else:
                     event.event.wait()
                     result = self.cache.get(key, event.data)
         return cast(R, result)
+
+
+class Memoize:
+    def __init__(self, cache: "Cache", timeout: Optional[timedelta]):
+        self.cache = cache
+        self.timeout = timeout
+
+    def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
+        coro = inspect.iscoroutinefunction(fn)
+        return Wrapper(fn, self.timeout, self.cache, coro)
 
 
 class Cache:
@@ -110,10 +127,6 @@ class Cache:
 
     def __len__(self) -> int:
         return len(self._cache)
-
-    def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
-        coro = inspect.iscoroutinefunction(fn)
-        return Wrapper(fn, self, coro)
 
     def get(self, key: str, default: Any = None) -> Any:
         self.core.access(key)

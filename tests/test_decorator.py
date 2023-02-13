@@ -4,10 +4,10 @@ from typing import Dict, List
 from unittest.mock import Mock
 from threading import Thread
 from random import randint
-from theine import Cache
+from theine import Cache, Memoize
 
 
-@Cache("tlfu", 1000)
+@Memoize(Cache("tlfu", 1000), None)
 def foo(id: int, m: Mock) -> Dict:
     m(id)
     return {"id": id}
@@ -18,7 +18,7 @@ def _(id: int, m: Mock) -> str:
     return f"id-{id}"
 
 
-@Cache("tlfu", 1000)
+@Memoize(Cache("tlfu", 1000), None)
 async def async_foo(id: int, m: Mock) -> Dict:
     m(id)
     return {"id": id}
@@ -30,7 +30,7 @@ def _(id: int, m: Mock) -> str:
 
 
 class Bar:
-    @Cache("tlfu", 1000)
+    @Memoize(Cache("tlfu", 1000), None)
     def foo(self, id: int, m: Mock) -> Dict:
         m(id)
         return {"id": id}
@@ -39,7 +39,7 @@ class Bar:
     def _(self, id: int, m: Mock) -> str:
         return f"id-{id}"
 
-    @Cache("tlfu", 1000)
+    @Memoize(Cache("tlfu", 1000), None)
     async def async_foo(self, id: int, m: Mock) -> Dict:
         m(id)
         return {"id": id}
