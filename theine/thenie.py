@@ -84,7 +84,8 @@ class CachedAwaitable:
 
 class Wrapper(Generic[P, R]):
     key_func: Optional[Callable] = None
-    key_map: DefaultDict[Hashable, str] = defaultdict(lambda: uuid4().hex)
+    hk_map: DefaultDict[Hashable, str] = defaultdict(lambda: uuid4().hex)
+    kh_map: Dict[str, Hashable] = {}
 
     def __init__(
         self,
@@ -108,9 +109,13 @@ class Wrapper(Generic[P, R]):
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         key = ""
+        auto_key = False
+        evicted = None
         if self.key_func is None:
             key_hash = _make_key(args, kwargs, self.typed)
-            key = f"{self.func.__name__}:{self.key_map[key_hash]}"
+            key = f"{self.func.__name__}:{self.hk_map[key_hash]}"
+            self.kh_map[key] = key_hash
+            auto_key = True
         else:
             key = self.key_func(*args, **kwargs)
         sentinel = object()
@@ -118,18 +123,23 @@ class Wrapper(Generic[P, R]):
         if result is sentinel:
             if self.coro:
                 result = CachedAwaitable(self.func(*args, **kwargs))
-                self.cache.set(key, result, self.timeout)
+                evicted = self.cache.set(key, result, self.timeout)
             else:
                 event = EventData(Event(), None)
                 exist = self.events.setdefault(key, event)
                 if event is exist:
                     result = self.func(*args, **kwargs)
-                    self.cache.set(key, result, self.timeout)
+                    evicted = self.cache.set(key, result, self.timeout)
                     event.event.set()
                     self.events.pop(key, None)
                 else:
                     event.event.wait()
                     result = self.cache.get(key, event.data)
+        # remove from hk_map and kh_map same time
+        if auto_key and (evicted is not None):
+            key_hash = self.kh_map.pop(evicted, None)
+            if key_hash is not None:
+                self.hk_map.pop(key_hash, None)
         return cast(R, result)
 
     @overload
@@ -179,7 +189,9 @@ class Cache:
             return default
         return cast(CachedValue, cached).data
 
-    def set(self, key: str, value: Any, ttl: Optional[timedelta] = None):
+    def set(
+        self, key: str, value: Any, ttl: Optional[timedelta] = None
+    ) -> Optional[str]:
         now = time.time()
         ts = max(ttl.total_seconds(), 1.0) if ttl is not None else math.inf
         expire = now + ts
@@ -191,10 +203,12 @@ class Cache:
         else:
             self.core.deschedule(key)
         if exist:
-            return
+            return None
         evicted = self.core.set_policy(key)
         if evicted is not None:
             self._cache.pop(evicted, None)
+            return evicted
+        return None
 
     def delete(self, key: str) -> bool:
         v = self._cache.pop(key, sentinel)
