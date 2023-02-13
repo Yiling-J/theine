@@ -152,3 +152,28 @@ async def test_instance_method_async():
     assert mock.call_count == 6
     ints = [i[0][0] for i in mock.call_args_list]
     assert set(ints) == {0, 1, 2, 3, 4, 5}
+
+
+@Memoize(Cache("tlfu", 1000), None)
+def foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
+    return {"a": a, "b": b, "c": c}
+
+
+def test_auto_key():
+
+    tests = [
+        ([1, 2, 3], {}, (1, 2, 3)),
+        ([1, 2], {}, (1, 2, 5)),
+        ([1], {"b": 2}, (1, 2, 5)),
+        ([], {"a": 1, "b": 2}, (1, 2, 5)),
+        ([], {"a": 1, "b": 2, "c": 3}, (1, 2, 3)),
+    ]
+
+    def assert_data(args, kwargs, expected):
+        result = foo_auto_key(*args, **kwargs)
+        assert result["a"] == expected[0]
+        assert result["b"] == expected[1]
+        assert result["c"] == expected[2]
+
+    for case in tests:
+        assert_data(*case)

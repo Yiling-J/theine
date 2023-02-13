@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 import math
 import time
@@ -8,6 +9,7 @@ from threading import Event, Thread
 from typing import (
     Any,
     Callable,
+    DefaultDict,
     Hashable,
     Optional,
     Dict,
@@ -20,7 +22,8 @@ from typing import (
 from typing_extensions import Protocol, ParamSpec, Self, Concatenate
 from theine_core import LruCore, TlfuCore
 from theine.models import CachedValue
-from functools import update_wrapper
+from functools import update_wrapper, _make_key
+from uuid import uuid4
 
 sentinel = object()
 
@@ -80,18 +83,23 @@ class CachedAwaitable:
 
 
 class Wrapper(Generic[P, R]):
+    key_func: Optional[Callable] = None
+    key_map: DefaultDict[Hashable, str] = defaultdict(lambda: uuid4().hex)
+
     def __init__(
         self,
         fn: Callable[P, R],
         timeout: Optional[timedelta],
         cache: "Cache",
         coro: bool,
+        typed: bool,
     ):
         self.func = fn
         self.cache = cache
         self.events: Dict[str, EventData] = {}
         self.coro = coro
         self.timeout = timeout
+        self.typed = typed
         update_wrapper(self, fn)
 
     def key(self, fn: Callable[P, str]) -> "Wrapper":
@@ -99,7 +107,12 @@ class Wrapper(Generic[P, R]):
         return self
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        key = self.key_func(*args, **kwargs)
+        key = ""
+        if self.key_func is None:
+            key_hash = _make_key(args, kwargs, self.typed)
+            key = f"{self.func.__name__}:{self.key_map[key_hash]}"
+        else:
+            key = self.key_func(*args, **kwargs)
         sentinel = object()
         result = self.cache.get(key, sentinel)
         if result is sentinel:
@@ -134,13 +147,16 @@ class Wrapper(Generic[P, R]):
 
 
 class Memoize:
-    def __init__(self, cache: "Cache", timeout: Optional[timedelta]):
+    def __init__(
+        self, cache: "Cache", timeout: Optional[timedelta], typed: bool = False
+    ):
         self.cache = cache
         self.timeout = timeout
+        self.typed = typed
 
     def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
         coro = inspect.iscoroutinefunction(fn)
-        return Wrapper(fn, self.timeout, self.cache, coro)
+        return Wrapper(fn, self.timeout, self.cache, coro, self.typed)
 
 
 class Cache:
