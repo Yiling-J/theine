@@ -97,6 +97,7 @@ class Wrapper(Generic[P, R]):
     ):
         self.func = fn
         self.cache = cache
+        self.cache._enable_maintenance = False
         self.events: Dict[str, EventData] = {}
         self.coro = coro
         self.timeout = timeout
@@ -105,6 +106,7 @@ class Wrapper(Generic[P, R]):
 
     def key(self, fn: Callable[P, str]) -> "Wrapper":
         self.key_func = fn
+        self.cache._enable_maintenance = True
         return self
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
@@ -173,8 +175,9 @@ class Cache:
     def __init__(self, policy: str, size: int):
         self._cache: Dict[Hashable, CachedValue] = {}
         self.core = CORES[policy](size)
-        self.maintainer = Thread(target=self.maintenance, daemon=True)
-        self.maintainer.start()
+        self._enable_maintenance = True
+        self._maintainer = Thread(target=self.maintenance, daemon=True)
+        self._maintainer.start()
 
     def __len__(self) -> int:
         return len(self._cache)
@@ -219,5 +222,6 @@ class Cache:
 
     def maintenance(self):
         while True:
-            self.core.advance(time.time_ns(), self._cache)
+            if self._enable_maintenance:
+                self.core.advance(time.time_ns(), self._cache)
             time.sleep(0.5)
