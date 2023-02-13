@@ -84,18 +84,20 @@ class Wrapper(Generic[P, R]):
         sentinel = object()
         result = self.cache.get(key, sentinel)
         if result is sentinel:
-            event = EventData(Event(), None)
-            exist = self.events.setdefault(key, event)
-            if event is exist:
-                result = self.func(*args, **kwargs)
-                if self.coro:
-                    result = CachedAwaitable(result)
+            if self.coro:
+                result = CachedAwaitable(self.func(*args, **kwargs))
                 self.cache.set(key, result)
-                event.event.set()
-                self.events.pop(key, None)
             else:
-                event.event.wait()
-                result = self.cache.get(key, event.data)
+                event = EventData(Event(), None)
+                exist = self.events.setdefault(key, event)
+                if event is exist:
+                    result = self.func(*args, **kwargs)
+                    self.cache.set(key, result)
+                    event.event.set()
+                    self.events.pop(key, None)
+                else:
+                    event.event.wait()
+                    result = self.cache.get(key, event.data)
         return cast(R, result)
 
 
