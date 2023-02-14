@@ -98,7 +98,7 @@ class Wrapper(Generic[P, R]):
         typed: bool,
     ):
         self._key_func: Optional[Callable[..., str]] = None
-        self._hk_map: Dict[Hashable, Key] = {}
+        self._hk_map: Dict[Hashable, str] = {}
         self._kh_map: Dict[str, Hashable] = {}
         self._events: Dict[Hashable, EventData] = {}
         self._func: Callable = fn
@@ -119,17 +119,22 @@ class Wrapper(Generic[P, R]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         if self._auto_key:
             keyh = _make_key(args, kwargs, self._typed)
-            new = Key()
-            keyd = self._hk_map.setdefault(keyh, new)
-            if keyd is new:
-                keyd.key = key = uuid4().hex
-                keyd.event.set()
-                self._kh_map[key] = keyh
-            elif keyd.key is not None:
-                key = cast(str, keyd.key)
+            v = self._hk_map.get(keyh, "")
+            if v != "":
+                key = v
             else:
-                keyd.event.wait()
-                key = cast(str, keyd.key)
+                event = EventData(Event(), None)
+                v = self._events.setdefault(keyh, event)
+                if v is event:
+                    uid = key = uuid4().hex
+                    self._hk_map[keyh] = uid
+                    self._kh_map[uid] = keyh
+                    event.data = uid
+                    event.event.set()
+                    self._events.pop(keyh, None)
+                else:
+                    v.event.wait()
+                    key = cast(str, v.data)
         else:
             key = self._key_func(*args, **kwargs)  # type: ignore
 
