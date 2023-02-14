@@ -75,7 +75,7 @@ def read_keys_memoize(keys: List[str]):
             assert v == key
 
 
-def test_read_decorator_with_key(benchmark):
+def test_read_decorator_custom_key(benchmark):
     z = Zipf(1.0001, 10, REQUESTS // 10)
     keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
     read_keys_memoize(keys)
