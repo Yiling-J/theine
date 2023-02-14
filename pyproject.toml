@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.7"
 typing-extensions = "^4.4.0"
-theine-core = "^0.1.5"
+theine-core = "^0.1.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"

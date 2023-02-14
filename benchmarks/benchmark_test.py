@@ -1,7 +1,5 @@
 from datetime import timedelta
 from typing import List
-import concurrent.futures
-import pytest
 import uuid
 from benchmarks.zipf import Zipf
 from theine.thenie import Cache, Memoize
@@ -115,33 +113,3 @@ def test_read_decorator_auto_key(benchmark):
         setup=setup,
         rounds=10,
     )
-
-
-def assert_read_key(n: int):
-    key = f"key:{n}"
-    v = read_auto_key(key)
-    assert v == key
-    assert len(read_auto_key._cache) < 2000
-    assert len(read_auto_key._hk_map) < 2000
-    assert len(read_auto_key._kh_map) < 2000
-    print(".", end="")
-
-
-def simple_load_test():
-    z = Zipf(1.0001, 10, 5000000)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2000) as executor:
-        for _ in range(1000000):
-            future = executor.submit(assert_read_key, z.get())
-            exception = future.exception()
-            if exception:
-                raise exception
-    print(
-        "==== done ====",
-        len(read_auto_key._cache),
-        len(read_auto_key._hk_map),
-        len(read_auto_key._kh_map),
-    )
-
-
-if __name__ == "__main__":
-    simple_load_test()

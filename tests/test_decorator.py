@@ -2,11 +2,13 @@ import asyncio
 from datetime import timedelta
 from time import sleep
 import pytest
+import concurrent.futures
 from typing import Dict, List, Any
 from unittest.mock import Mock
 from threading import Thread
 from random import randint
 from theine import Cache, Memoize
+from benchmarks.zipf import Zipf
 
 
 @Memoize(Cache("tlfu", 1000), None)
@@ -344,3 +346,34 @@ def test_cache_full_auto_key_sync_multi():
     assert len(foo_to_auto._cache) == 1000
     assert len(foo_to_auto._hk_map) == 1000
     assert len(foo_to_auto._kh_map) == 1000
+
+
+@Memoize(Cache("tlfu", 1000), timeout=None)
+def read_auto_key(key: str):
+    return key
+
+
+def assert_read_key(n: int):
+    key = f"key:{n}"
+    v = read_auto_key(key)
+    assert v == key
+    assert len(read_auto_key._cache) < 2000
+    assert len(read_auto_key._hk_map) < 2000
+    assert len(read_auto_key._kh_map) < 2000
+    print(".", end="")
+
+
+def test_cocurrency_load():
+    z = Zipf(1.0001, 10, 5000000)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+        for _ in range(200000):
+            future = executor.submit(assert_read_key, z.get())
+            exception = future.exception()
+            if exception:
+                raise exception
+    print(
+        "==== done ====",
+        len(read_auto_key._cache),
+        len(read_auto_key._hk_map),
+        len(read_auto_key._kh_map),
+    )

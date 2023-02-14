@@ -332,31 +332,31 @@ files = [
 
 [[package]]
 name = "theine-core"
-version = "0.1.5"
+version = "0.1.6"
 description = ""
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "theine_core-0.1.5-cp310-cp310-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:94110a09fc647ac8d9aca072324702b5e98b97228cc80a3266a5d3018e1f19f0"},
-    {file = "theine_core-0.1.5-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0febadd5a916b06d5fe7202ec5d9da21de69b9731dc20ca61ec1815f8dee7d18"},
-    {file = "theine_core-0.1.5-cp310-none-win_amd64.whl", hash = "sha256:92fb86934fd8649c1c069e7c27eea4a33f5e9006984f1ae05053124f4c456bd7"},
-    {file = "theine_core-0.1.5-cp311-cp311-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:0c138851402c5b0bdbeb06a2df44bfe67a5fdc10c67d8721e1c3652fe78d9c67"},
-    {file = "theine_core-0.1.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6286214dc0811b30b446422b148cb595e49add4a284222ae39eac4a67f75ff22"},
-    {file = "theine_core-0.1.5-cp311-none-win_amd64.whl", hash = "sha256:d5134a2906f1beacd1ce1b2b20f786495206bb40417fa9e2b6f86c1026128af3"},
-    {file = "theine_core-0.1.5-cp37-cp37m-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:60a3faa2ebcd5d95775bdaa2587553cd51001fd4501943289241d23d6add1810"},
-    {file = "theine_core-0.1.5-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:45363db33a4ae76f8c3fa8b6e6900ccfb19425626cf0256eefaea5757850ca7a"},
-    {file = "theine_core-0.1.5-cp37-none-win_amd64.whl", hash = "sha256:2db2a888bfcc10f90e5c31ef6ffc3e7084756d12d17dac8fbfdc18e1206f3611"},
-    {file = "theine_core-0.1.5-cp38-cp38-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:dd2ee3422d64991befb6b80a416618651776c533df55c860b4dd29316f7cc5ea"},
-    {file = "theine_core-0.1.5-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ca29eaf7b0f8d24369a194b5fc6e866d61b9b06472f6f16039bc7da77b93bda4"},
-    {file = "theine_core-0.1.5-cp38-none-win_amd64.whl", hash = "sha256:47e896747e5a95d6cd68b6e105686b2c55d6121bd759141979b30fa34c306632"},
-    {file = "theine_core-0.1.5-cp39-cp39-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:a200eed714c3e5042cede8d9fb3572b9da185780b5cf9bb88fc5ab9c0a5617c0"},
-    {file = "theine_core-0.1.5-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:64d4a2a4e72d5302dcef09a55e746ad7398f6ee456252077e93b3a10077f4d65"},
-    {file = "theine_core-0.1.5-cp39-none-win_amd64.whl", hash = "sha256:6be343b7ca47189d2f1b6346456a6e10d721ab73ab68a7f50987c92a4517b6eb"},
-    {file = "theine_core-0.1.5-pp37-pypy37_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:52a82c8ef45a352c113083484173ced9ce0e4bef4d467df1693d7b3490d421c7"},
-    {file = "theine_core-0.1.5-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:07b94b100a80c00952171db1a41c262ea0e678724e2af219d2a1d098d1523b5b"},
-    {file = "theine_core-0.1.5-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:009acb591d9074f3c34b1fdece60939188043826edf3382026f7b9cb807f286d"},
-    {file = "theine_core-0.1.5.tar.gz", hash = "sha256:9b88490e32b7d3d020719e10dddc01cd2f66af88f8d947281197cb9c68a198ec"},
+    {file = "theine_core-0.1.6-cp310-cp310-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:cbdde65f48bd8c0da83aac433ee6c76670752f4335daf85fbc64af2753589e51"},
+    {file = "theine_core-0.1.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fa4052bf5abc20f6744482532e81621783bbee5073e729c825480ed5800b738d"},
+    {file = "theine_core-0.1.6-cp310-none-win_amd64.whl", hash = "sha256:3c6fd68f7aa3b93f3457c7e049ee18449dbd005e0ec554ff8b3f1a77d6e45810"},
+    {file = "theine_core-0.1.6-cp311-cp311-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:be66916024cda83415a2753f64de8cdbd4cc220ac516148f201c45ff7dcf0800"},
+    {file = "theine_core-0.1.6-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f7caaa862e38df1a55d74eb25e7007eaf6cd5449bc019a2f6dafbbaada94bf84"},
+    {file = "theine_core-0.1.6-cp311-none-win_amd64.whl", hash = "sha256:7279a15d4258282358dec4b03d9704a227a6b7e5a7e12eacf950d21f72ad6975"},
+    {file = "theine_core-0.1.6-cp37-cp37m-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:e60e59a2c37591d220c4415fd09c7501c44084efd777f88808a02800bd3e56f1"},
+    {file = "theine_core-0.1.6-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:85c995d630b6b0f9683ab2566c7a6c526d54a394c8a396f9a5c74a2a0f2bd115"},
+    {file = "theine_core-0.1.6-cp37-none-win_amd64.whl", hash = "sha256:0038ac687999951af6edd862cd1d15e58af4cc2b4fafc78cff88ea995b282b5d"},
+    {file = "theine_core-0.1.6-cp38-cp38-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:8bb0d8f91efdb08c7ebc8ad4c71ff39c540c70af1e94784cbc402cafdc54b730"},
+    {file = "theine_core-0.1.6-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c44bc5e8d4ce1e53f25c7ed631ebc96ade4974439e5216f12c9e82bd0cb51349"},
+    {file = "theine_core-0.1.6-cp38-none-win_amd64.whl", hash = "sha256:7531ff73eed6e6e26feb47180c9213c85021f9a51fdc27241263823db75ac1f8"},
+    {file = "theine_core-0.1.6-cp39-cp39-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:4d1f7629987c662b9ee48306f3bf0929b828cdfc9f4304dbaeea6200aee514da"},
+    {file = "theine_core-0.1.6-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:261faa5bcf9670b0323c64ec7b031e42d76b0fd6c88b8060db9fa3167888f9b1"},
+    {file = "theine_core-0.1.6-cp39-none-win_amd64.whl", hash = "sha256:ed41be90d208ebdf57488e4f159b4a2b3a8b555296dd60296f50c5d55d413b33"},
+    {file = "theine_core-0.1.6-pp37-pypy37_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d0f8e52ce2ae27a7c5742ed7a62d133c401ac666e6212cf44bdac293395c0c4e"},
+    {file = "theine_core-0.1.6-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:04bcbae6f26123a43da3e2945eb2e4c0251e5911c4f30640faba49a594289fbb"},
+    {file = "theine_core-0.1.6-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dabcc98618e8ac5eb4f451f56b1d91975d01de25a00b57738f9224bdb1adc20b"},
+    {file = "theine_core-0.1.6.tar.gz", hash = "sha256:1ce39995544a31c3f731463a58ce3751586dd4477864dadc2c9f7c6945a12c24"},
 ]
 
 [[package]]
@@ -436,4 +436,4 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7"
-content-hash = "4a57c164713d05b360b679a944f01b36d15adeca3e3560d104cad8e5fe3a69b0"
+content-hash = "1d42e8e4164035ddd75a7d60ef1d9713ebf3b2dbd1177429c07ed0e627ccbfbc"
