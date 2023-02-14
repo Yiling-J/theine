@@ -42,13 +42,13 @@ cache.delete("key")
 ## Decorator
 Theine support string keys only, so to use a decorator, a function to convert input signatures to string is necessary. **The recommendation way is specifying the function explicitly**, this is approach 1, Theine also support generating key automatically, this is approach 2. I will list pros and cons below.
 
-**explicit key function**
+**- explicit key function**
 
 ```python
 from theine import Cache, Memoize
 from datetime import timedelta
 
-@Memoize(Cache("tlfu", REQUESTS // 10), timedelta(seconds=100))
+@Memoize(Cache("tlfu", 10000), timedelta(seconds=100))
 def foo(a:int) -> int:
     return a
 
@@ -59,7 +59,7 @@ def _(a:int) -> str:
 foo(1)
 
 # asyncio
-@Memoize(Cache("tlfu", REQUESTS // 10), timedelta(seconds=100))
+@Memoize(Cache("tlfu", 10000), timedelta(seconds=100))
 async def foo_a(a:int) -> int:
     return a
 
@@ -80,20 +80,20 @@ await foo_a(1)
 - You have to use 2 functions.
 - Performance. Theine API: around 8ms/10k requests ->> decorator: around 12ms/10k requests.
 
-** auto key function**
+**- auto key function**
 
 ```python
 from theine import Cache, Memoize
 from datetime import timedelta
 
-@Memoize(Cache("tlfu", REQUESTS // 10), timedelta(seconds=100), typed=True)
+@Memoize(Cache("tlfu", 10000), timedelta(seconds=100), typed=True)
 def foo(a:int) -> int:
     return a
 
 foo(1)
 
 # asyncio
-@Memoize(Cache("tlfu", REQUESTS // 10), timedelta(seconds=100), typed=True)
+@Memoize(Cache("tlfu", 10000), timedelta(seconds=100), typed=True)
 async def foo_a(a:int) -> int:
     return a
 
@@ -101,13 +101,13 @@ await foo_a(1)
 
 ```
 **Pros**
-- Same as explicit key version
-- No extra key function
+- Same as explicit key version.
+- No extra key function.
 
 **Cons**
 - Worse performance: around 18ms/10k requests.
 - Auto removal of stale keys is disabled due to current implementation.
-- Unexpected memory usage. The auto key function use same methods as Python's lru_cache. So just take a look [this issue](https://github.com/python/cpython/issues/88476) or [this post](https://rednafi.github.io/reflections/dont-wrap-instance-methods-with-functoolslru_cache-decorator-in-python.html).
+- Unexpected memory usage. The auto key function use same methods as Python's lru_cache. Take a look [this issue](https://github.com/python/cpython/issues/88476) or [this post](https://rednafi.github.io/reflections/dont-wrap-instance-methods-with-functoolslru_cache-decorator-in-python.html).
 
 
 # Django Cache Backend
