@@ -124,8 +124,8 @@ class Wrapper(Generic[P, R]):
                 key = v
             else:
                 event = EventData(Event(), None)
-                v = self._events.setdefault(keyh, event)
-                if v is event:
+                ve = self._events.setdefault(keyh, event)
+                if ve is event:
                     uid = key = uuid4().hex
                     self._hk_map[keyh] = uid
                     self._kh_map[uid] = keyh
@@ -133,8 +133,8 @@ class Wrapper(Generic[P, R]):
                     event.event.set()
                     self._events.pop(keyh, None)
                 else:
-                    v.event.wait()
-                    key = cast(str, v.data)
+                    ve.event.wait()
+                    key = cast(str, ve.data)
         else:
             key = self._key_func(*args, **kwargs)  # type: ignore
 
@@ -153,8 +153,8 @@ class Wrapper(Generic[P, R]):
         if data is not sentinel:
             return cast(R, data)
         event = EventData(Event(), None)
-        v = self._events.setdefault(key, event)
-        if v is event:
+        ve = self._events.setdefault(key, event)
+        if ve is event:
             result = self._func(*args, **kwargs)
             event.data = result
             self._events.pop(key, None)
@@ -165,8 +165,8 @@ class Wrapper(Generic[P, R]):
                     self._hk_map.pop(keyh, None)
             event.event.set()
         else:
-            v.event.wait()
-            result = v.data
+            ve.event.wait()
+            result = ve.data
         return cast(R, result)
 
     @overload
