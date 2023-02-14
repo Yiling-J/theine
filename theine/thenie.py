@@ -5,7 +5,7 @@ import time
 import types
 import inspect
 from datetime import timedelta
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from typing import (
     Any,
     Callable,
@@ -83,15 +83,6 @@ class CachedAwaitable:
 
 
 class Wrapper(Generic[P, R]):
-    key_func: Optional[Callable] = None
-    hk_map: DefaultDict[Hashable, str] = defaultdict(lambda: uuid4().hex)
-    kh_map: Dict[str, Hashable] = {}
-    fn: Callable
-    cache: "Cache"
-    coro: bool
-    typed: bool
-    timeout: Optional[timedelta]
-
     def __init__(
         self,
         fn: Callable[P, R],
@@ -100,53 +91,57 @@ class Wrapper(Generic[P, R]):
         coro: bool,
         typed: bool,
     ):
-        self.func = fn
-        self.cache = cache
-        self.cache._enable_maintenance = False
-        self.events: Dict[str, EventData] = {}
-        self.coro = coro
-        self.timeout = timeout
-        self.typed = typed
+        self._key_func: Optional[Callable] = None
+        self._hk_map: Dict[Hashable, str] = {}
+        self._kh_map: Dict[str, Hashable] = {}
+        self._events: Dict[str, EventData] = {}
+        self._func: Callable = fn
+        self._cache: "Cache" = cache
+        self._cache._enable_maintenance = False
+        self._coro: bool = coro
+        self._timeout: Optional[timedelta] = timeout
+        self._typed: bool = typed
         update_wrapper(self, fn)
 
     def key(self, fn: Callable[P, str]) -> "Wrapper":
-        self.key_func = fn
-        self.cache._enable_maintenance = True
+        self._key_func = fn
+        self._cache._enable_maintenance = True
         return self
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         key = ""
         auto_key = False
         evicted = None
-        if self.key_func is None:
-            key_hash = _make_key(args, kwargs, self.typed)
-            key = f"{self.func.__name__}:{self.hk_map[key_hash]}"
-            self.kh_map[key] = key_hash
+        if self._key_func is None:
+            key_hash = _make_key(args, kwargs, self._typed)
+            key_uuid = self._hk_map.setdefault(key_hash, uuid4().hex)
+            key = f"{self._func.__name__}:{key_uuid}"
+            self._kh_map[key] = key_hash
             auto_key = True
         else:
-            key = self.key_func(*args, **kwargs)
+            key = self._key_func(*args, **kwargs)
         sentinel = object()
-        result = self.cache.get(key, sentinel)
+        result = self._cache.get(key, sentinel)
         if result is sentinel:
-            if self.coro:
-                result = CachedAwaitable(self.func(*args, **kwargs))
-                evicted = self.cache.set(key, result, self.timeout)
+            if self._coro:
+                result = CachedAwaitable(self._func(*args, **kwargs))
+                evicted = self._cache.set(key, result, self._timeout)
             else:
                 event = EventData(Event(), None)
-                exist = self.events.setdefault(key, event)
+                exist = self._events.setdefault(key, event)
                 if event is exist:
-                    result = self.func(*args, **kwargs)
-                    evicted = self.cache.set(key, result, self.timeout)
+                    result = self._func(*args, **kwargs)
+                    evicted = self._cache.set(key, result, self._timeout)
                     event.event.set()
-                    self.events.pop(key, None)
+                    self._events.pop(key, None)
                 else:
                     event.event.wait()
-                    result = self.cache.get(key, event.data)
+                    result = self._cache.get(key, event.data)
         # remove from hk_map and kh_map same time
         if auto_key and (evicted is not None):
-            key_hash = self.kh_map.pop(evicted, None)
+            key_hash = self._kh_map.pop(evicted, None)
             if key_hash is not None:
-                self.hk_map.pop(key_hash, None)
+                self._hk_map.pop(key_hash, None)
         return cast(R, result)
 
     @overload

@@ -1,4 +1,6 @@
 import asyncio
+from datetime import timedelta
+from time import sleep
 import pytest
 from typing import Dict, List, Any
 from unittest.mock import Mock
@@ -20,7 +22,7 @@ def _(id: int, m: Mock) -> str:
 
 @Memoize(Cache("tlfu", 1000), None)
 def foo_empty() -> Dict:
-    return {"id": id}
+    return {"id": "empty"}
 
 
 @foo_empty.key
@@ -77,6 +79,16 @@ class Bar:
         m(id)
         return f"id-{id}"
 
+    @Memoize(Cache("tlfu", 1000), None)
+    def foo_auto(self, id: int, m: Mock) -> Dict:
+        m(id)
+        return {"id": id}
+
+    @Memoize(Cache("tlfu", 1000), None)
+    async def async_foo_auto(self, id: int, m: Mock) -> Dict:
+        m(id)
+        return {"id": id}
+
 
 def test_sync_decorator():
     mock = Mock()
@@ -97,6 +109,21 @@ def test_sync_decorator():
     assert mock.call_count == 6
     ints = [i[0][0] for i in mock.call_args_list]
     assert set(ints) == {0, 1, 2, 3, 4, 5}
+
+
+def test_sync_decorator_empty():
+    threads: List[Thread] = []
+
+    def assert_id():
+        assert foo_empty()["id"] == "empty"
+
+    for _ in range(500):
+        t = Thread(target=assert_id, args=[])
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
 
 
 @pytest.mark.asyncio
@@ -177,3 +204,114 @@ def test_auto_key():
 
     for case in tests:
         assert_data(*case)
+
+
+@Memoize(Cache("tlfu", 1000), None)
+async def async_foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
+    return {"a": a, "b": b, "c": c}
+
+
+@pytest.mark.asyncio
+async def test_auto_key_async():
+
+    tests = [
+        ([1, 2, 3], {}, (1, 2, 3)),
+        ([1, 2], {}, (1, 2, 5)),
+        ([1], {"b": 2}, (1, 2, 5)),
+        ([], {"a": 1, "b": 2}, (1, 2, 5)),
+        ([], {"a": 1, "b": 2, "c": 3}, (1, 2, 3)),
+    ]
+
+    async def assert_data(args, kwargs, expected):
+        result = await async_foo_auto_key(*args, **kwargs)
+        assert result["a"] == expected[0]
+        assert result["b"] == expected[1]
+        assert result["c"] == expected[2]
+
+    for case in tests:
+        await assert_data(*case)
+
+
+def test_instance_method_auto_key_sync():
+    mock = Mock()
+    threads: List[Thread] = []
+    bar = Bar()
+
+    def assert_id(id: int, m: Mock):
+        assert bar.foo_auto(id, m)["id"] == id
+
+    for _ in range(500):
+        t = Thread(target=assert_id, args=[randint(0, 5), mock])
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    print("xxxx", mock.call_args_list)
+    assert mock.call_count == 6
+    ints = [i[0][0] for i in mock.call_args_list]
+    assert set(ints) == {0, 1, 2, 3, 4, 5}
+
+
+@pytest.mark.asyncio
+async def test_instance_method_auto_key_async():
+    mock = Mock()
+    bar = Bar()
+
+    async def assert_id(id: int, m: Mock):
+        data = await bar.async_foo_auto(id, m)
+        assert data["id"] == id
+
+    await asyncio.gather(*[assert_id(randint(0, 5), mock) for _ in range(500)])
+
+    assert mock.call_count == 6
+    ints = [i[0][0] for i in mock.call_args_list]
+    assert set(ints) == {0, 1, 2, 3, 4, 5}
+
+
+@Memoize(Cache("tlfu", 1000), timedelta(seconds=1))
+def foo_to(id: int) -> Dict:
+    return {"id": id}
+
+
+@foo_to.key
+def _(id: int) -> str:
+    return f"id-{id}"
+
+
+def test_timeout():
+    for i in range(30):
+        result = foo_to(i)
+        assert result["id"] == i
+    assert len(foo_to._cache) == 30
+    current = 30
+    counter = 0
+    while True:
+        sleep(5)
+        counter += 1
+        assert len(foo_to._cache) < current
+        current = len(foo_to._cache)
+        if current == 0:
+            break
+
+
+@Memoize(Cache("tlfu", 1000), timedelta(seconds=1))
+def foo_to_auto(id: int, m: Mock) -> Dict:
+    m(id)
+    return {"id": id}
+
+
+def test_timeout_auto_key():
+    mock = Mock()
+    for i in range(30):
+        result = foo_to_auto(i, mock)
+        assert result["id"] == i
+    assert len(foo_to_auto._cache) == 30
+    assert mock.call_count == 30
+    sleep(5)
+    assert len(foo_to_auto._cache) == 30
+    for i in range(30):
+        result = foo_to_auto(i, mock)
+        assert result["id"] == i
+    assert mock.call_count == 60
