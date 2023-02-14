@@ -40,7 +40,7 @@ cache.delete("key")
 ```
 
 ## Decorator
-Theine support string keys only, so to use a decorator, a function to convert input signatures to string is necessary. **The recommendation way is specifying the function explicitly**, this is approach 1, Theine also support generating key automatically, this is approach 2. I will list pros and cons below.
+Theine support string keys only, so to use a decorator, a function to convert input signatures to string is necessary. **The recommended way is specifying the function explicitly**, this is approach 1, Theine also support generating key automatically, this is approach 2. I will list pros and cons below.
 
 **- explicit key function**
 
