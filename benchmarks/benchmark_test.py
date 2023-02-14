@@ -113,7 +113,7 @@ def test_read_decorator_auto_key(benchmark):
     benchmark.pedantic(
         lambda keys: read_keys_memoize_auto_key(keys),
         setup=setup,
-        rounds=1,
+        rounds=10,
     )
 
 
