@@ -248,7 +248,6 @@ def test_instance_method_auto_key_sync():
     for t in threads:
         t.join()
 
-    print("xxxx", mock.call_args_list)
     assert mock.call_count == 6
     ints = [i[0][0] for i in mock.call_args_list]
     assert set(ints) == {0, 1, 2, 3, 4, 5}
@@ -315,3 +314,33 @@ def test_timeout_auto_key():
         result = foo_to_auto(i, mock)
         assert result["id"] == i
     assert mock.call_count == 60
+
+
+def test_cache_full_evict():
+    mock = Mock()
+    for i in range(30, 1500):
+        result = foo_to_auto(i, mock)
+        assert result["id"] == i
+    assert len(foo_to_auto._cache) == 1000
+    assert len(foo_to_auto._hk_map) == 1000
+    assert len(foo_to_auto._kh_map) == 1000
+
+
+def test_cache_full_auto_key_sync_multi():
+    mock = Mock()
+    threads: List[Thread] = []
+
+    def assert_id(id: int, m: Mock):
+        assert foo_to_auto(id, m)["id"] == id
+
+    for i in range(2000, 3500):
+        t = Thread(target=assert_id, args=[i, mock])
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    assert len(foo_to_auto._cache) == 1000
+    assert len(foo_to_auto._hk_map) == 1000
+    assert len(foo_to_auto._kh_map) == 1000

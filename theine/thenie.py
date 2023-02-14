@@ -82,6 +82,12 @@ class CachedAwaitable:
         return self.result
 
 
+class Key:
+    def __init__(self):
+        self.key: Optional[str] = None
+        self.event = Event()
+
+
 class Wrapper(Generic[P, R]):
     def __init__(
         self,
@@ -91,57 +97,71 @@ class Wrapper(Generic[P, R]):
         coro: bool,
         typed: bool,
     ):
-        self._key_func: Optional[Callable] = None
-        self._hk_map: Dict[Hashable, str] = {}
+        self._key_func: Optional[Callable[..., str]] = None
+        self._hk_map: Dict[Hashable, Key] = {}
         self._kh_map: Dict[str, Hashable] = {}
-        self._events: Dict[str, EventData] = {}
+        self._events: Dict[Hashable, EventData] = {}
         self._func: Callable = fn
         self._cache: "Cache" = cache
         self._cache._enable_maintenance = False
         self._coro: bool = coro
         self._timeout: Optional[timedelta] = timeout
         self._typed: bool = typed
+        self._auto_key: bool = True
         update_wrapper(self, fn)
 
     def key(self, fn: Callable[P, str]) -> "Wrapper":
         self._key_func = fn
         self._cache._enable_maintenance = True
+        self._auto_key = False
         return self
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        key = ""
-        auto_key = False
-        evicted = None
-        if self._key_func is None:
-            key_hash = _make_key(args, kwargs, self._typed)
-            key_uuid = self._hk_map.setdefault(key_hash, uuid4().hex)
-            key = f"{self._func.__name__}:{key_uuid}"
-            self._kh_map[key] = key_hash
-            auto_key = True
+        if self._auto_key:
+            keyh = _make_key(args, kwargs, self._typed)
+            new = Key()
+            keyd = self._hk_map.setdefault(keyh, new)
+            if keyd is new:
+                keyd.key = key = uuid4().hex
+                keyd.event.set()
+                self._kh_map[key] = keyh
+            elif keyd.key is not None:
+                key = cast(str, keyd.key)
+            else:
+                keyd.event.wait()
+                key = cast(str, keyd.key)
         else:
-            key = self._key_func(*args, **kwargs)
-        sentinel = object()
-        result = self._cache.get(key, sentinel)
-        if result is sentinel:
-            if self._coro:
+            key = self._key_func(*args, **kwargs)  # type: ignore
+
+        if self._coro:
+            result = self._cache.get(key, sentinel)
+            if result is sentinel:
                 result = CachedAwaitable(self._func(*args, **kwargs))
                 evicted = self._cache.set(key, result, self._timeout)
-            else:
-                event = EventData(Event(), None)
-                exist = self._events.setdefault(key, event)
-                if event is exist:
-                    result = self._func(*args, **kwargs)
-                    evicted = self._cache.set(key, result, self._timeout)
-                    event.event.set()
-                    self._events.pop(key, None)
-                else:
-                    event.event.wait()
-                    result = self._cache.get(key, event.data)
-        # remove from hk_map and kh_map same time
-        if auto_key and (evicted is not None):
-            key_hash = self._kh_map.pop(evicted, None)
-            if key_hash is not None:
-                self._hk_map.pop(key_hash, None)
+                if self._auto_key and evicted:
+                    keyh = self._kh_map.pop(evicted, None)
+                    if keyh:
+                        self._hk_map.pop(keyh, None)
+            return cast(R, result)
+
+        data = self._cache.get(key, sentinel)
+        if data is not sentinel:
+            return cast(R, data)
+        event = EventData(Event(), None)
+        v = self._events.setdefault(key, event)
+        if v is event:
+            result = self._func(*args, **kwargs)
+            event.data = result
+            self._events.pop(key, None)
+            evicted = self._cache.set(key, result, self._timeout)
+            if self._auto_key and evicted:
+                keyh = self._kh_map.pop(evicted, None)
+                if keyh:
+                    self._hk_map.pop(keyh, None)
+            event.event.set()
+        else:
+            v.event.wait()
+            result = v.data
         return cast(R, result)
 
     @overload
