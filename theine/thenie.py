@@ -86,6 +86,11 @@ class Wrapper(Generic[P, R]):
     key_func: Optional[Callable] = None
     hk_map: DefaultDict[Hashable, str] = defaultdict(lambda: uuid4().hex)
     kh_map: Dict[str, Hashable] = {}
+    fn: Callable
+    cache: "Cache"
+    coro: bool
+    typed: bool
+    timeout: Optional[timedelta]
 
     def __init__(
         self,
