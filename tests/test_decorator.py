@@ -1,14 +1,16 @@
 import asyncio
-from datetime import timedelta
-from time import sleep
-import pytest
 import concurrent.futures
-from typing import Dict, List, Any
-from unittest.mock import Mock
-from threading import Thread
+from datetime import timedelta
 from random import randint
-from theine import Cache, Memoize
+from threading import Thread
+from time import sleep
+from typing import Any, Dict, List
+from unittest.mock import Mock
+
+import pytest
+
 from benchmarks.zipf import Zipf
+from theine import Cache, Memoize
 
 
 @Memoize(Cache("tlfu", 1000), None)

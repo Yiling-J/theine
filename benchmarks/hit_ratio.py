@@ -1,8 +1,10 @@
-from unittest.mock import Mock
-from theine import Cache, Memoize
 from functools import lru_cache
+from unittest.mock import Mock
+
+from cachetools import LFUCache, cached
 from zipf import Zipf
-from cachetools import cached, LFUCache
+
+from theine import Cache, Memoize
 
 
 @lru_cache(maxsize=5000)

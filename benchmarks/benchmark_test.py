@@ -1,10 +1,12 @@
+import uuid
 from datetime import timedelta
 from typing import List
-import uuid
+
+import pytest
+from cachetools import LFUCache, cached
+
 from benchmarks.zipf import Zipf
 from theine.thenie import Cache, Memoize
-from cachetools import cached, LFUCache
-
 
 REQUESTS = 10000
 
@@ -57,129 +59,96 @@ def test_read(benchmark):
     )
 
 
-@Memoize(Cache("tlfu", REQUESTS // 10), timeout=None)
-def read(key: str):
+def get(key: str):
     return key
 
 
-@read.key
-def _(key: str) -> str:
-    return key
-
-
-def read_keys_memoize(keys: List[str]):
+def get_many(getter, keys: List[str]):
     for key in keys:
-        v = read(key)
+        v = getter(key)
         if v is not None:
             assert v == key
 
 
-def test_read_decorator_custom_key(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-    keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
-    read_keys_memoize(keys)
+@pytest.fixture(params=["theine_tlfu_auto", "theine_tlfu_custom", "cachetools_lfu"])
+def cache_func_provider(request):
+    if request.param == "theine_tlfu_auto":
 
+        def _(size):
+            cache = Cache("tlfu", size)
+            func = Memoize(cache, None)(get)
+            return func
+
+        return _
+
+    elif request.param == "theine_tlfu_custom":
+
+        def _(size):
+            cache = Cache("tlfu", size)
+            func = Memoize(cache, None)(get)
+            func.key(lambda key: key)
+            return func
+
+        return _
+
+    elif request.param == "cachetools_lfu":
+
+        def _(size):
+            cache = LFUCache(size)
+            func = cached(cache)(get)
+            return func
+
+        return _
+
+    return None
+
+
+def test_decorator_read(benchmark, cache_func_provider):
     def setup():
-        return ([f"key:{z.get()}" for _ in range(REQUESTS)],), {}
+        func = cache_func_provider(REQUESTS)
+        keys = [f"key:{i}" for i in range(REQUESTS)]
+        for key in keys:
+            func(key)
+        return (
+            func,
+            keys,
+        ), {}
 
     benchmark.pedantic(
-        lambda keys: read_keys_memoize(keys),
+        lambda func, keys: get_many(func, keys),
         setup=setup,
         rounds=10,
     )
 
 
-@Memoize(Cache("tlfu", REQUESTS // 10), timeout=None)
-def read_auto_key(key: str):
-    return key
-
-
-def read_keys_memoize_auto_key(keys: List[str]):
-    for key in keys:
-        v = read_auto_key(key)
-        if v is not None:
-            assert v == key
-
-
-def test_read_decorator_auto_key(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-    keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
-    read_keys_memoize_auto_key(keys)
-
+def test_decorator_write(benchmark, cache_func_provider):
     def setup():
-        return ([f"key:{z.get()}" for _ in range(REQUESTS)],), {}
+        func = cache_func_provider(REQUESTS // 10)
+        keys = [f"key:{i}" for i in range(REQUESTS)]
+        return (
+            func,
+            keys,
+        ), {}
 
     benchmark.pedantic(
-        lambda keys: read_keys_memoize_auto_key(keys),
+        lambda func, keys: get_many(func, keys),
         setup=setup,
         rounds=10,
     )
 
 
-def test_write_decorator_custom_key(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-
+def test_decorator_zipf(benchmark, cache_func_provider):
     def setup():
-        _uuid = uuid.uuid4().int
-        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
+        z = Zipf(1.0001, 10, REQUESTS)
+        func = cache_func_provider(REQUESTS // 10)
+        keys = [f"key:{z.get()}" for _ in range(REQUESTS)]
+        return (
+            func,
+            keys,
+        ), {}
 
     benchmark.pedantic(
-        lambda keys: read_keys_memoize(keys),
-        setup=setup,
-        rounds=10,
-    )
-
-
-def test_write_decorator_auto_key(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-
-    def setup():
-        _uuid = uuid.uuid4().int
-        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
-
-    benchmark.pedantic(
-        lambda keys: read_keys_memoize_auto_key(keys),
-        setup=setup,
-        rounds=10,
-    )
-
-
-@cached(cache=LFUCache(maxsize=REQUESTS // 10))
-def read_key_cachetools_lfu(key: str):
-    return key
-
-
-def read_keys_memoize_cachetools_lfu(keys: List[str]):
-    for key in keys:
-        v = read_key_cachetools_lfu(key)
-        if v is not None:
-            assert v == key
-
-
-def test_read_decorator_cachetools_lfu(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-    keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
-    read_keys_memoize_cachetools_lfu(keys)
-
-    def setup():
-        return ([f"key:{z.get()}" for _ in range(REQUESTS)],), {}
-
-    benchmark.pedantic(
-        lambda keys: read_keys_memoize_cachetools_lfu(keys),
-        setup=setup,
-        rounds=10,
-    )
-
-
-def test_write_decorator_cachetools_lfu(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-
-    def setup():
-        _uuid = uuid.uuid4().int
-        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
-
-    benchmark.pedantic(
-        lambda keys: read_keys_memoize_cachetools_lfu(keys),
+        lambda func, keys: get_many(func, keys),
         setup=setup,
         rounds=10,
     )

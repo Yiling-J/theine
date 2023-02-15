@@ -1,9 +1,11 @@
-from threading import Lock
 import time
 from datetime import timedelta
+from threading import Lock
 from typing import Optional, cast
-from theine import Cache as Theine
+
 from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
+
+from theine import Cache as Theine
 
 
 class Cache(BaseCache):

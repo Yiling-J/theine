@@ -1,29 +1,20 @@
-from collections import defaultdict
-from dataclasses import dataclass
+import inspect
 import math
 import time
 import types
-import inspect
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import timedelta
+from functools import _make_key, update_wrapper
 from threading import Event, Lock, Thread
-from typing import (
-    Any,
-    Callable,
-    DefaultDict,
-    Hashable,
-    Optional,
-    Dict,
-    Type,
-    cast,
-    Generic,
-    TypeVar,
-    overload,
-)
-from typing_extensions import Protocol, ParamSpec, Self, Concatenate
-from theine_core import LruCore, TlfuCore
-from theine.models import CachedValue
-from functools import update_wrapper, _make_key
+from typing import (Any, Callable, DefaultDict, Dict, Generic, Hashable,
+                    Optional, Type, TypeVar, cast, overload)
 from uuid import uuid4
+
+from theine_core import LruCore, TlfuCore
+from typing_extensions import Concatenate, ParamSpec, Protocol, Self
+
+from theine.models import CachedValue
 
 sentinel = object()
 

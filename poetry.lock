@@ -131,6 +131,24 @@ files = [
 ]
 
 [[package]]
+name = "isort"
+version = "5.11.5"
+description = "A Python utility / library to sort Python imports."
+category = "dev"
+optional = false
+python-versions = ">=3.7.0"
+files = [
+    {file = "isort-5.11.5-py3-none-any.whl", hash = "sha256:ba1d72fb2595a01c7895a5128f9585a5cc4b6d395f1c8d514989b9a7eb2a8746"},
+    {file = "isort-5.11.5.tar.gz", hash = "sha256:6be1f76a507cb2ecf16c7cf14a37e41609ca082330be4e3436a18ef74add55db"},
+]
+
+[package.extras]
+colors = ["colorama (>=0.4.3,<0.5.0)"]
+pipfile-deprecated-finder = ["pip-shims (>=0.5.2)", "pipreqs", "requirementslib"]
+plugins = ["setuptools"]
+requirements-deprecated-finder = ["pip-api", "pipreqs"]
+
+[[package]]
 name = "mypy"
 version = "1.0.0"
 description = "Optional static typing for Python"
@@ -460,4 +478,4 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7"
-content-hash = "d0b16a856714a528835de5604014f1470601f9fef396b2eddc23be80f2b84e7f"
+content-hash = "ebf84ef9831fff1af9ef7a15b6f5650483d1a8ceb685edb38d43a79b4306524e"

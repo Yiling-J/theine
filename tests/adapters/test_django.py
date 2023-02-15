@@ -1,10 +1,11 @@
 import datetime
 import time
-from typing import List, cast, Iterable
+from typing import Iterable, List, cast
 
 import pytest
-from django.core.cache import cache as default_cache
 from django.core.cache import BaseCache
+from django.core.cache import cache as default_cache
+
 from theine.adapters.django import Cache as Theine
 
 
