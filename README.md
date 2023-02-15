@@ -121,3 +121,14 @@ CACHES = {
     },
 }
 ```
+
+# Benchmarks(WIP)
+
+## 10k requests
+Cachetools: https://github.com/tkem/cachetools
+Source Code: https://github.com/Yiling-J/theine/blob/main/benchmarks/benchmark_test.py
+
+|       | Theine API | Theine(W-TinyLFU) Auto-Key Decorator | Cachetools(LFU) Decorator |
+|-------|------------|--------------------------------------|---------------------------|
+| Read  | 6.03ms     | 12.75ms                              | 17.10ms                   |
+| Write | 23.22ms    | 67.53ms                              | 440.50ms                  |
