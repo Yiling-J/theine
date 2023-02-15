@@ -418,6 +418,18 @@ files = [
 ]
 
 [[package]]
+name = "types-cachetools"
+version = "5.3.0.0"
+description = "Typing stubs for cachetools"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-cachetools-5.3.0.0.tar.gz", hash = "sha256:ed00554a55a66ae62a50f8c55f71b68d76c8f375d7b9c07480f629564b5c7fac"},
+    {file = "types_cachetools-5.3.0.0-py3-none-any.whl", hash = "sha256:cd20f3835b7bc008522e42c685ae02d708a34042f83a2638c0ab741b2b6c454f"},
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.4.0"
 description = "Backported and Experimental Type Hints for Python 3.7+"
@@ -448,4 +460,4 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7"
-content-hash = "206a1ffd1cdb45060668f8083337ff8f1372badb3f5e996da080c6572b3f70b4"
+content-hash = "d0b16a856714a528835de5604014f1470601f9fef396b2eddc23be80f2b84e7f"

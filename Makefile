@@ -8,4 +8,4 @@ benchmark:
 
 .PHONY: lint
 lint:
-	mypy --ignore-missing-imports .
+	poetry run mypy --ignore-missing-imports .
