@@ -115,7 +115,7 @@ await foo_a(1)
 **Cons**
 - Worse performance: around 18ms/10k requests.
 - Auto removal of stale keys is disabled due to current implementation.
-- Unexpected memory usage. The auto key function use same methods as Python's lru_cache. Take a look [this issue](https://github.com/python/cpython/issues/88476) or [this post](https://rednafi.github.io/reflections/dont-wrap-instance-methods-with-functoolslru_cache-decorator-in-python.html).
+- Unexpected memory usage. The auto key function use same methods as Python's lru_cache. Take a look [this issue](https://github.com/python/cpython/issues/88476) or [this one](https://github.com/python/cpython/issues/64058).
 
 
 ## Django Cache Backend
