@@ -7,8 +7,16 @@ High performance in-memory cache inspired by [Caffeine](https://github.com/ben-m
 - Simple API
 - Django cache backend
 
-## Benchmarks
-https://github.com/Yiling-J/cacheme-benchmark
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [API](#api)
+- [Decorator](#decorator)
+- [Django Cache Backend](#django-cache-backend)
+- [Benchmarks(WIP)](#benchmarks)
+  * [continuous benchmark](#continuous-benchmark)
+  * [10k requests zipf](#10k-requests-zipf)
 
 ## Requirements
 Python 3.7+
@@ -110,7 +118,7 @@ await foo_a(1)
 - Unexpected memory usage. The auto key function use same methods as Python's lru_cache. Take a look [this issue](https://github.com/python/cpython/issues/88476) or [this post](https://rednafi.github.io/reflections/dont-wrap-instance-methods-with-functoolslru_cache-decorator-in-python.html).
 
 
-# Django Cache Backend
+## Django Cache Backend
 
 ```Python
 CACHES = {
@@ -122,15 +130,17 @@ CACHES = {
 }
 ```
 
-# Benchmarks(WIP)
+## Benchmarks
+### continuous benchmark
+https://github.com/Yiling-J/cacheme-benchmark
 
-## 10k requests zipf
+### 10k requests zipf
 Cachetools: https://github.com/tkem/cachetools
 
 Source Code: https://github.com/Yiling-J/theine/blob/main/benchmarks/benchmark_test.py
 
-|       | Theine API | Theine(W-TinyLFU) Auto-Key Decorator | Cachetools(LFU) Decorator    |
-|-------|-------------|---------------------------------------|----------------------------|
-| Read  | 6.03 ms     | 12.75 ms                              | 17.10 ms                   |
-| Write | 23.22 ms    | 67.53 ms                              | 440.50 ms                  |
+|       | Theine API | Theine(W-TinyLFU) Custom-Key Decorator | Theine(W-TinyLFU) Auto-Key Decorator | Cachetools(LFU) Decorator |
+|-------|------------|----------------------------------------|--------------------------------------|---------------------------|
+| Read  | 6.03 ms    | 10.75 ms                               | 12.75 ms                             | 17.10 ms                  |
+| Write | 23.22 ms   | 26.22 ms                               | 67.53 ms                             | 440.50 ms                 |
 
