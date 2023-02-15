@@ -39,7 +39,6 @@ class Cache(BaseCache):
             self.delete(key)
             return
         key = self.make_key(key, version)
-        print("setttt", key, to)
         self.cache.set(
             key,
             value,
