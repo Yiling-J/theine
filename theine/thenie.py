@@ -96,6 +96,7 @@ class Wrapper(Generic[P, R]):
         cache: "Cache",
         coro: bool,
         typed: bool,
+        lock: bool,
     ):
         self._key_func: Optional[Callable[..., str]] = None
         self._hk_map: Dict[Hashable, str] = {}
@@ -108,6 +109,7 @@ class Wrapper(Generic[P, R]):
         self._timeout: Optional[timedelta] = timeout
         self._typed: bool = typed
         self._auto_key: bool = True
+        self._lock = lock
         update_wrapper(self, fn)
 
     def key(self, fn: Callable[P, str]) -> "Wrapper":
@@ -123,18 +125,23 @@ class Wrapper(Generic[P, R]):
             if v != "":
                 key = v
             else:
-                event = EventData(Event(), None)
-                ve = self._events.setdefault(keyh, event)
-                if ve is event:
+                if self._lock:
+                    event = EventData(Event(), None)
+                    ve = self._events.setdefault(keyh, event)
+                    if ve is event:
+                        uid = key = uuid4().hex
+                        self._hk_map[keyh] = uid
+                        self._kh_map[uid] = keyh
+                        event.data = uid
+                        event.event.set()
+                        self._events.pop(keyh, None)
+                    else:
+                        ve.event.wait()
+                        key = cast(str, ve.data)
+                else:
                     uid = key = uuid4().hex
                     self._hk_map[keyh] = uid
                     self._kh_map[uid] = keyh
-                    event.data = uid
-                    event.event.set()
-                    self._events.pop(keyh, None)
-                else:
-                    ve.event.wait()
-                    key = cast(str, ve.data)
         else:
             key = self._key_func(*args, **kwargs)  # type: ignore
 
@@ -152,21 +159,29 @@ class Wrapper(Generic[P, R]):
         data = self._cache.get(key, sentinel)
         if data is not sentinel:
             return cast(R, data)
-        event = EventData(Event(), None)
-        ve = self._events.setdefault(key, event)
-        if ve is event:
+        if self._lock:
+            event = EventData(Event(), None)
+            ve = self._events.setdefault(key, event)
+            if ve is event:
+                result = self._func(*args, **kwargs)
+                event.data = result
+                self._events.pop(key, None)
+                evicted = self._cache.set(key, result, self._timeout)
+                if self._auto_key and evicted:
+                    keyh = self._kh_map.pop(evicted, None)
+                    if keyh:
+                        self._hk_map.pop(keyh, None)
+                event.event.set()
+            else:
+                ve.event.wait()
+                result = ve.data
+        else:
             result = self._func(*args, **kwargs)
-            event.data = result
-            self._events.pop(key, None)
             evicted = self._cache.set(key, result, self._timeout)
             if self._auto_key and evicted:
                 keyh = self._kh_map.pop(evicted, None)
                 if keyh:
                     self._hk_map.pop(keyh, None)
-            event.event.set()
-        else:
-            ve.event.wait()
-            result = ve.data
         return cast(R, result)
 
     @overload
@@ -185,15 +200,20 @@ class Wrapper(Generic[P, R]):
 
 class Memoize:
     def __init__(
-        self, cache: "Cache", timeout: Optional[timedelta], typed: bool = False
+        self,
+        cache: "Cache",
+        timeout: Optional[timedelta],
+        typed: bool = False,
+        lock: bool = False,
     ):
         self.cache = cache
         self.timeout = timeout
         self.typed = typed
+        self.lock = lock
 
     def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
         coro = inspect.iscoroutinefunction(fn)
-        return Wrapper(fn, self.timeout, self.cache, coro, self.typed)
+        return Wrapper(fn, self.timeout, self.cache, coro, self.typed, self.lock)
 
 
 class Cache:

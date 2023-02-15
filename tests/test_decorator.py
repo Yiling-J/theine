@@ -348,7 +348,7 @@ def test_cache_full_auto_key_sync_multi():
     assert len(foo_to_auto._kh_map) == 1000
 
 
-@Memoize(Cache("tlfu", 1000), timeout=None)
+@Memoize(Cache("tlfu", 1000), timeout=None, lock=True)
 def read_auto_key(key: str):
     return key
 

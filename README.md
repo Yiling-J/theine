@@ -73,7 +73,7 @@ await foo_a(1)
 
 **Pros**
 - A decorator with both sync and async support, you can replace your lru_cache with Theine now.
-- Thundering herd protection.
+- Thundering herd protection(multithreading: set `lock=True` in `Memoize`, asyncio: always enabled).
 - Type checked. Mypy can check key function to make sure it has same input signature as original function and return a string.
 
 **Cons**

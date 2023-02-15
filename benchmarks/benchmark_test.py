@@ -3,6 +3,7 @@ from typing import List
 import uuid
 from benchmarks.zipf import Zipf
 from theine.thenie import Cache, Memoize
+from cachetools import cached, LFUCache
 
 
 REQUESTS = 10000
@@ -110,6 +111,75 @@ def test_read_decorator_auto_key(benchmark):
 
     benchmark.pedantic(
         lambda keys: read_keys_memoize_auto_key(keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
+def test_write_decorator_custom_key(benchmark):
+    z = Zipf(1.0001, 10, REQUESTS // 10)
+
+    def setup():
+        _uuid = uuid.uuid4().int
+        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
+
+    benchmark.pedantic(
+        lambda keys: read_keys_memoize(keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
+def test_write_decorator_auto_key(benchmark):
+    z = Zipf(1.0001, 10, REQUESTS // 10)
+
+    def setup():
+        _uuid = uuid.uuid4().int
+        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
+
+    benchmark.pedantic(
+        lambda keys: read_keys_memoize_auto_key(keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
+@cached(cache=LFUCache(maxsize=REQUESTS // 10))
+def read_key_cachetools_lfu(key: str):
+    return key
+
+
+def read_keys_memoize_cachetools_lfu(keys: List[str]):
+    for key in keys:
+        v = read_key_cachetools_lfu(key)
+        if v is not None:
+            assert v == key
+
+
+def test_read_decorator_cachetools_lfu(benchmark):
+    z = Zipf(1.0001, 10, REQUESTS // 10)
+    keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
+    read_keys_memoize_cachetools_lfu(keys)
+
+    def setup():
+        return ([f"key:{z.get()}" for _ in range(REQUESTS)],), {}
+
+    benchmark.pedantic(
+        lambda keys: read_keys_memoize_cachetools_lfu(keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
+def test_write_decorator_cachetools_lfu(benchmark):
+    z = Zipf(1.0001, 10, REQUESTS // 10)
+
+    def setup():
+        _uuid = uuid.uuid4().int
+        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
+
+    benchmark.pedantic(
+        lambda keys: read_keys_memoize_cachetools_lfu(keys),
         setup=setup,
         rounds=10,
     )
