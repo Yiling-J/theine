@@ -33,6 +33,8 @@ pip install theine
 
 ## API
 
+Key should be a **str**, and value can be any **Python object**.
+
 ```Python
 from theine import Cache
 from datetime import timedelta
