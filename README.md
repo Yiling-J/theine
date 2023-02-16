@@ -21,7 +21,7 @@ cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
 - [Django Cache Backend](#django-cache-backend)
 - [Benchmarks(WIP)](#benchmarks)
   * [continuous benchmark](#continuous-benchmark)
-  * [10k requests zipf](#10k-requests-zipf)
+  * [10k requests](#10k-requests)
 
 ## Requirements
 Python 3.7+
