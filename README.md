@@ -134,13 +134,17 @@ CACHES = {
 ### continuous benchmark
 https://github.com/Yiling-J/cacheme-benchmark
 
-### 10k requests zipf
+### 10k requests
 Cachetools: https://github.com/tkem/cachetools
 
 Source Code: https://github.com/Yiling-J/theine/blob/main/benchmarks/benchmark_test.py
 
-|       | Theine API | Theine(W-TinyLFU) Custom-Key Decorator | Theine(W-TinyLFU) Auto-Key Decorator | Cachetools(LFU) Decorator |
-|-------|------------|----------------------------------------|--------------------------------------|---------------------------|
-| Read  | 6.03 ms    | 10.75 ms                               | 12.75 ms                             | 17.10 ms                  |
-| Write | 23.22 ms   | 26.22 ms                               | 67.53 ms                             | 440.50 ms                 |
+Write and Mix Zipf use 1k cache max size, so you can see the high cost of traditional LFU eviction policy here.
+
+|                                        | Read     | Write     | Mix Zipf  |
+|----------------------------------------|----------|-----------|-----------|
+| Theine(W-TinyLFU) API                  | 6.34 ms  | 22.40 ms  |           |
+| Theine(W-TinyLFU) Auto-Key Decorator   | 16.10 ms | 67.95 ms  | 40.02 ms  |
+| Theine(W-TinyLFU) Custom-Key Decorator | 12.94 ms | 25.60 ms  | 18.08 ms  |
+| Cachetools LFU Decorator               | 15.70 ms | 627.10 ms | 191.04 ms |
 
