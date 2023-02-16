@@ -4,6 +4,11 @@ High performance in-memory cache inspired by [Caffeine](https://github.com/ben-m
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
 - High hit ratio with [W-TinyLFU eviction policy](https://arxiv.org/pdf/1512.00727.pdf)
 - Expired data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
+
+  > TTL must be considered in in-memory caching because
+it limits the effective (unexpired) working set size. Efficiently removing expired objects from cache needs to be
+prioritized over cache eviction. - [A large scale analysis of hundreds of in-memory
+cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
 - Simple API
 - Django cache backend
 
