@@ -139,7 +139,7 @@ Cachetools: https://github.com/tkem/cachetools
 
 Source Code: https://github.com/Yiling-J/theine/blob/main/benchmarks/benchmark_test.py
 
-Write and Mix Zipf use 1k cache max size, so you can see the high cost of traditional LFU eviction policy here.
+Write and Mix Zipf use 1k max cache size, so you can see the high cost of traditional LFU eviction policy here.
 
 |                                        | Read     | Write     | Mix Zipf  |
 |----------------------------------------|----------|-----------|-----------|
