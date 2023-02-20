@@ -22,6 +22,7 @@ cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
 - [Benchmarks(WIP)](#benchmarks)
   * [continuous benchmark](#continuous-benchmark)
   * [10k requests](#10k-requests)
+  * [hit ratios](#hit-ratios)
 
 ## Requirements
 Python 3.7+
@@ -155,3 +156,24 @@ Write and Mix Zipf use 1k max cache size, so you can see the high cost of tradit
 | Theine(W-TinyLFU) Custom-Key Decorator | 12.94 ms | 25.60 ms  | 18.08 ms  |
 | Cachetools LFU Decorator               | 15.70 ms | 627.10 ms | 191.04 ms |
 
+### hit ratios
+
+All hit ratio benchmarks use small datasets and finish in seconds/minutes, better to try Theine yourself and focus on whether the cache exceeds your performance needs and has the desired capabilities. You may also notice that in ucb bench, LRU has a higher hit ratio. Take a look this: [cache performing worse than LRU](https://github.com/ben-manes/caffeine/issues/106) if you are interested.
+
+Source Code: https://github.com/Yiling-J/theine/blob/main/benchmarks/trace_bench.py
+
+**zipf**
+
+![hit ratios](benchmarks/zipf.png)
+**search**
+
+This trace is described as "disk read accesses initiated by a large commercial search engine in response to various web search requests."
+![hit ratios](benchmarks/s3.png)
+**database**
+
+This trace is described as "a database server running at a commercial site running an ERP application on top of a commercial database."
+![hit ratios](benchmarks/ds1.png)
+**UC Berkeley web traces**
+
+This trace consists of 2 days' worth of HTTP traces gathered from the Home IP service offered by UC Berkeley to its students.
+![hit ratios](benchmarks/ucb.png)
