@@ -3,16 +3,25 @@ import itertools
 import math
 import time
 import types
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
-from threading import Event, Lock, Thread
-from typing import (Any, Callable, DefaultDict, Dict, Generic, Hashable,
-                    Optional, Type, TypeVar, cast, overload)
+from threading import Event, Thread
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Hashable,
+    Optional,
+    Type,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from theine_core import LruCore, TlfuCore
-from typing_extensions import Concatenate, ParamSpec, Protocol, Self
+from typing_extensions import ParamSpec, Protocol, Self
 
 from theine.models import CachedValue
 
@@ -92,8 +101,8 @@ class Wrapper(Generic[P, R]):
         lock: bool,
     ):
         self._key_func: Optional[Callable[..., str]] = None
-        self._hk_map: Dict[Hashable, str] = {}
-        self._kh_map: Dict[str, Hashable] = {}
+        self._hk_map: Dict[Hashable, int] = {}
+        self._kh_map: Dict[int, Hashable] = {}
         self._events: Dict[Hashable, EventData] = {}
         self._func: Callable = fn
         self._cache: "Cache" = cache
@@ -114,15 +123,16 @@ class Wrapper(Generic[P, R]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         if self._auto_key:
             keyh = _make_key(args, kwargs, self._typed)
-            v = self._hk_map.get(keyh, "")
-            if v != "":
-                key = v
+            v = self._hk_map.get(keyh, -1)
+            if v != -1:
+                key = f"{v}"
             else:
                 if self._lock:
                     event = EventData(Event(), None)
                     ve = self._events.setdefault(keyh, event)
                     if ve is event:
-                        uid = key = f"{next(_counter)}"
+                        uid = next(_counter)
+                        key = f"{uid}"
                         self._hk_map[keyh] = uid
                         self._kh_map[uid] = keyh
                         event.data = uid
@@ -132,7 +142,8 @@ class Wrapper(Generic[P, R]):
                         ve.event.wait()
                         key = cast(str, ve.data)
                 else:
-                    uid = key = f"{next(_counter)}"
+                    uid = next(_counter)
+                    key = f"{uid}"
                     self._hk_map[keyh] = uid
                     self._kh_map[uid] = keyh
         else:
@@ -144,7 +155,7 @@ class Wrapper(Generic[P, R]):
                 result = CachedAwaitable(self._func(*args, **kwargs))
                 evicted = self._cache.set(key, result, self._timeout)
                 if self._auto_key and evicted:
-                    keyh = self._kh_map.pop(evicted, None)
+                    keyh = self._kh_map.pop(int(evicted), None)
                     if keyh:
                         self._hk_map.pop(keyh, None)
             return cast(R, result)
@@ -161,7 +172,7 @@ class Wrapper(Generic[P, R]):
                 self._events.pop(key, None)
                 evicted = self._cache.set(key, result, self._timeout)
                 if self._auto_key and evicted:
-                    keyh = self._kh_map.pop(evicted, None)
+                    keyh = self._kh_map.pop(int(evicted), None)
                     if keyh:
                         self._hk_map.pop(keyh, None)
                 event.event.set()
@@ -172,7 +183,7 @@ class Wrapper(Generic[P, R]):
             result = self._func(*args, **kwargs)
             evicted = self._cache.set(key, result, self._timeout)
             if self._auto_key and evicted:
-                keyh = self._kh_map.pop(evicted, None)
+                keyh = self._kh_map.pop(int(evicted), None)
                 if keyh:
                     self._hk_map.pop(keyh, None)
         return cast(R, result)
