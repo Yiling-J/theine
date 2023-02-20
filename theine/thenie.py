@@ -203,6 +203,21 @@ class Wrapper(Generic[P, R]):
 
 
 class Memoize:
+    """
+    Memoize decorator to cache function results. This decorator has 2 modes, first one custom-key mode, this
+    is also the recommended mode. You must specify the key function manually. Second one is auto-key mode,
+    Theine will generate a key for you based on your function inputs.
+
+    :param cache: cache instance from Cache class.
+    :param timeout: timedelta to store the function result. Default is None which means no expiration.
+    :param typed: Only valid with auto-key mode. If typed is set to true,
+        function arguments of different types will be cached separately.
+        If typed is false, the implementation will usually regard them as equivalent calls and only cache
+        a single result. (Some types such as str and int may be cached separately even when typed is false.)
+    :param lock: Cocurrent requests to same data will only fetch from source once. Default is False and
+        only make sense if you are using multitheads and want to avoid thundering herd problem.
+    """
+
     def __init__(
         self,
         cache: "Cache",
@@ -221,6 +236,13 @@ class Memoize:
 
 
 class Cache:
+    """
+    Create new Theine cache store and use API with this class.
+
+    :param policy: eviction policy, "tlfu" and "lru" are the only two supported now.
+    :param size: cache size.
+    """
+
     def __init__(self, policy: str, size: int):
         self._cache: Dict[Hashable, CachedValue] = {}
         self.core = CORES[policy](size)
@@ -232,6 +254,12 @@ class Cache:
         return len(self._cache)
 
     def get(self, key: str, default: Any = None) -> Any:
+        """
+        Retrieve data with cache key. If given key is not in cache, return default value.
+
+        :param key: key string.
+        :param default: returned value if key is not found in cache, default None.
+        """
         self.core.access(key)
         cached = self._cache.get(key, sentinel)
         if cached is sentinel:
@@ -244,6 +272,13 @@ class Cache:
     def set(
         self, key: str, value: Any, ttl: Optional[timedelta] = None
     ) -> Optional[str]:
+        """
+        Add new data to cache. If the key already exists, value will be overwritten.
+
+        :param key: key string.
+        :param value: cached value.
+        :param ttl: timedelta to store the data Default is None which means no expiration.
+        """
         now = time.time()
         ts = max(ttl.total_seconds(), 1.0) if ttl is not None else math.inf
         expire = now + ts
@@ -263,6 +298,11 @@ class Cache:
         return None
 
     def delete(self, key: str) -> bool:
+        """
+        Remove key from cache. Return True if given key exists in cache and been deleted.
+
+        :param key: key string.
+        """
         v = self._cache.pop(key, sentinel)
         if v is not sentinel:
             self.core.remove(key)
@@ -270,6 +310,9 @@ class Cache:
         return False
 
     def maintenance(self):
+        """
+        Remove expired keys.
+        """
         while True:
             if self._enable_maintenance:
                 self.core.advance(time.time_ns(), self._cache)
