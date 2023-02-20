@@ -1,4 +1,5 @@
 import inspect
+import itertools
 import math
 import time
 import types
@@ -9,7 +10,6 @@ from functools import _make_key, update_wrapper
 from threading import Event, Lock, Thread
 from typing import (Any, Callable, DefaultDict, Dict, Generic, Hashable,
                     Optional, Type, TypeVar, cast, overload)
-from uuid import uuid4
 
 from theine_core import LruCore, TlfuCore
 from typing_extensions import Concatenate, ParamSpec, Protocol, Self
@@ -17,6 +17,8 @@ from typing_extensions import Concatenate, ParamSpec, Protocol, Self
 from theine.models import CachedValue
 
 sentinel = object()
+
+_counter = itertools.count()
 
 
 class Core(Protocol):
@@ -120,7 +122,7 @@ class Wrapper(Generic[P, R]):
                     event = EventData(Event(), None)
                     ve = self._events.setdefault(keyh, event)
                     if ve is event:
-                        uid = key = uuid4().hex
+                        uid = key = f"{next(_counter)}"
                         self._hk_map[keyh] = uid
                         self._kh_map[uid] = keyh
                         event.data = uid
@@ -130,7 +132,7 @@ class Wrapper(Generic[P, R]):
                         ve.event.wait()
                         key = cast(str, ve.data)
                 else:
-                    uid = key = uuid4().hex
+                    uid = key = f"{next(_counter)}"
                     self._hk_map[keyh] = uid
                     self._kh_map[uid] = keyh
         else:

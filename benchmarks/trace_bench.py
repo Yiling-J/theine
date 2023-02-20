@@ -1,9 +1,11 @@
-from typing import Callable, Iterable
-from theine import Cache, Memoize
-from unittest.mock import Mock
 from functools import lru_cache
+from typing import Callable, Iterable
+from unittest.mock import Mock
+
 from cachetools import LFUCache, cached
 from zipf import Zipf
+
+from theine import Cache, Memoize
 
 
 def zipf_key_gen() -> Iterable:
