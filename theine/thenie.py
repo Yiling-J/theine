@@ -88,7 +88,7 @@ CORES: Dict[str, Type[Core]] = {
 }
 
 P = ParamSpec("P")
-R = TypeVar("R")
+R = TypeVar("R", covariant=True)
 _unset = object()
 
 
@@ -116,77 +116,77 @@ class Key:
         self.event = Event()
 
 
-class Wrapper(Generic[P, R]):
-    def __init__(
-        self,
-        fn: Callable[P, R],
-        timeout: Optional[timedelta],
-        cache: "Cache",
-        coro: bool,
-        typed: bool,
-        lock: bool,
-    ):
-        self._key_func: Optional[Callable[..., Hashable]] = None
-        self._events: Dict[Hashable, EventData] = {}
-        self._func: Callable = fn
-        self._cache: "Cache" = cache
-        self._coro: bool = coro
-        self._timeout: Optional[timedelta] = timeout
-        self._typed: bool = typed
-        self._auto_key: bool = True
-        self._lock = lock
-        update_wrapper(self, fn)
+class Cached(Protocol[P, R]):
+    _cache: "Cache"
 
-    def key(self, fn: Callable[P, Hashable]) -> "Wrapper":
-        self._key_func = fn
-        self._auto_key = False
-        return self
+    def key(self, fn: Callable[P, Hashable]):
+        ...
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
-        if self._auto_key:
-            key = _make_key(args, kwargs, self._typed)
-        else:
-            key = self._key_func(*args, **kwargs)  # type: ignore
+        ...
 
-        if self._coro:
-            result = self._cache.get(key, sentinel)
+
+def Wrapper(
+    fn: Callable[P, R],
+    timeout: Optional[timedelta],
+    cache: "Cache",
+    coro: bool,
+    typed: bool,
+    lock: bool,
+) -> Cached[P, R]:
+
+    _key_func: Optional[Callable[..., Hashable]] = None
+    _events: Dict[Hashable, EventData] = {}
+    _func: Callable = fn
+    _cache: "Cache" = cache
+    _coro: bool = coro
+    _timeout: Optional[timedelta] = timeout
+    _typed: bool = typed
+    _auto_key: bool = True
+    _lock = lock
+
+    def key(fn: Callable[P, Hashable]):
+        nonlocal _key_func
+        nonlocal _auto_key
+        _key_func = fn
+        _auto_key = False
+
+    def fetch(*args: P.args, **kwargs: P.kwargs) -> R:
+        if _auto_key:
+            key = _make_key(args, kwargs, _typed)
+        else:
+            key = _key_func(*args, **kwargs)  # type: ignore
+
+        if _coro:
+            result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = CachedAwaitable(self._func(*args, **kwargs))
-                self._cache.set(key, result, self._timeout)
+                result = CachedAwaitable(_func(*args, **kwargs))
+                _cache.set(key, result, _timeout)
             return cast(R, result)
 
-        data = self._cache.get(key, sentinel)
+        data = _cache.get(key, sentinel)
         if data is not sentinel:
             return cast(R, data)
-        if self._lock:
+        if _lock:
             event = EventData(Event(), None)
-            ve = self._events.setdefault(key, event)
+            ve = _events.setdefault(key, event)
             if ve is event:
-                result = self._func(*args, **kwargs)
+                result = _func(*args, **kwargs)
                 event.data = result
-                self._events.pop(key, None)
-                self._cache.set(key, result, self._timeout)
+                _events.pop(key, None)
+                _cache.set(key, result, _timeout)
                 event.event.set()
             else:
                 ve.event.wait()
                 result = ve.data
         else:
-            result = self._func(*args, **kwargs)
-            self._cache.set(key, result, self._timeout)
+            result = _func(*args, **kwargs)
+            _cache.set(key, result, _timeout)
         return cast(R, result)
 
-    @overload
-    def __get__(self, instance, owner) -> Callable[..., R]:
-        ...
-
-    @overload
-    def __get__(self, instance, owner) -> Self:  # type: ignore
-        ...
-
-    def __get__(self, instance, owner):
-        if instance is None:
-            return self
-        return cast(Callable[..., R], types.MethodType(self, instance))
+    fetch._cache = _cache  # type: ignore
+    fetch.key = key  # type: ignore
+    return fetch  # type: ignore
 
 
 class Memoize:
@@ -217,9 +217,10 @@ class Memoize:
         self.typed = typed
         self.lock = lock
 
-    def __call__(self, fn: Callable[P, R]) -> Wrapper[P, R]:
+    def __call__(self, fn: Callable[P, R]) -> Cached[P, R]:
         coro = inspect.iscoroutinefunction(fn)
-        return Wrapper(fn, self.timeout, self.cache, coro, self.typed, self.lock)
+        wrapper = Wrapper(fn, self.timeout, self.cache, coro, self.typed, self.lock)
+        return update_wrapper(wrapper, fn)
 
 
 class Cache:
@@ -287,10 +288,8 @@ class Cache:
         key_str = ""
         if isinstance(key, str):
             key_str = key
-            self.core.access(key_str)
         elif isinstance(key, int):
             key_str = f"{key}"
-            self.core.access(key_str)
         else:
             key_str = self.key_gen(key)
         now = time.time()
@@ -322,10 +321,8 @@ class Cache:
         key_str = ""
         if isinstance(key, str):
             key_str = key
-            self.core.access(key_str)
         elif isinstance(key, int):
             key_str = f"{key}"
-            self.core.access(key_str)
         else:
             key_str = self.key_gen(key)
             self.key_gen.remove(key_str)
