@@ -27,7 +27,33 @@ from theine.models import CachedValue
 
 sentinel = object()
 
-_counter = itertools.count()
+
+def KeyGen():
+    counter = itertools.count()
+    hk_map: Dict[Hashable, int] = {}
+    kh_map: Dict[int, Hashable] = {}
+
+    def gen(input: Hashable) -> str:
+        id = hk_map.get(input, None)
+        if id is None:
+            id = next(counter)
+            hk_map[input] = id
+            kh_map[id] = input
+        return f"_auto:{id}"
+
+    def _remove(key: str):
+        h = kh_map.pop(int(key.replace("_auto:", "")), None)
+        if h is not None:
+            hk_map.pop(h, None)
+
+    def _len() -> int:
+        return len(hk_map)
+
+    gen.remove = _remove
+    gen.len = _len
+    gen.kh = kh_map
+    gen.hk = hk_map
+    return gen
 
 
 class Core(Protocol):
@@ -52,7 +78,7 @@ class Core(Protocol):
     def access(self, key: str):
         ...
 
-    def advance(self, now: int, cache: dict):
+    def advance(self, now: int, cache: Dict, kh: Dict, hk: Dict):
         ...
 
 
@@ -100,13 +126,10 @@ class Wrapper(Generic[P, R]):
         typed: bool,
         lock: bool,
     ):
-        self._key_func: Optional[Callable[..., str]] = None
-        self._hk_map: Dict[Hashable, int] = {}
-        self._kh_map: Dict[int, Hashable] = {}
+        self._key_func: Optional[Callable[..., Hashable]] = None
         self._events: Dict[Hashable, EventData] = {}
         self._func: Callable = fn
         self._cache: "Cache" = cache
-        self._cache._enable_maintenance = False
         self._coro: bool = coro
         self._timeout: Optional[timedelta] = timeout
         self._typed: bool = typed
@@ -114,38 +137,14 @@ class Wrapper(Generic[P, R]):
         self._lock = lock
         update_wrapper(self, fn)
 
-    def key(self, fn: Callable[P, str]) -> "Wrapper":
+    def key(self, fn: Callable[P, Hashable]) -> "Wrapper":
         self._key_func = fn
-        self._cache._enable_maintenance = True
         self._auto_key = False
         return self
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         if self._auto_key:
-            keyh = _make_key(args, kwargs, self._typed)
-            v = self._hk_map.get(keyh, -1)
-            if v != -1:
-                key = f"{v}"
-            else:
-                if self._lock:
-                    event = EventData(Event(), None)
-                    ve = self._events.setdefault(keyh, event)
-                    if ve is event:
-                        uid = next(_counter)
-                        key = f"{uid}"
-                        self._hk_map[keyh] = uid
-                        self._kh_map[uid] = keyh
-                        event.data = uid
-                        event.event.set()
-                        self._events.pop(keyh, None)
-                    else:
-                        ve.event.wait()
-                        key = cast(str, ve.data)
-                else:
-                    uid = next(_counter)
-                    key = f"{uid}"
-                    self._hk_map[keyh] = uid
-                    self._kh_map[uid] = keyh
+            key = _make_key(args, kwargs, self._typed)
         else:
             key = self._key_func(*args, **kwargs)  # type: ignore
 
@@ -153,11 +152,7 @@ class Wrapper(Generic[P, R]):
             result = self._cache.get(key, sentinel)
             if result is sentinel:
                 result = CachedAwaitable(self._func(*args, **kwargs))
-                evicted = self._cache.set(key, result, self._timeout)
-                if self._auto_key and evicted:
-                    keyh = self._kh_map.pop(int(evicted), None)
-                    if keyh:
-                        self._hk_map.pop(keyh, None)
+                self._cache.set(key, result, self._timeout)
             return cast(R, result)
 
         data = self._cache.get(key, sentinel)
@@ -170,22 +165,14 @@ class Wrapper(Generic[P, R]):
                 result = self._func(*args, **kwargs)
                 event.data = result
                 self._events.pop(key, None)
-                evicted = self._cache.set(key, result, self._timeout)
-                if self._auto_key and evicted:
-                    keyh = self._kh_map.pop(int(evicted), None)
-                    if keyh:
-                        self._hk_map.pop(keyh, None)
+                self._cache.set(key, result, self._timeout)
                 event.event.set()
             else:
                 ve.event.wait()
                 result = ve.data
         else:
             result = self._func(*args, **kwargs)
-            evicted = self._cache.set(key, result, self._timeout)
-            if self._auto_key and evicted:
-                keyh = self._kh_map.pop(int(evicted), None)
-                if keyh:
-                    self._hk_map.pop(keyh, None)
+            self._cache.set(key, result, self._timeout)
         return cast(R, result)
 
     @overload
@@ -237,83 +224,128 @@ class Memoize:
 
 class Cache:
     """
-    Create new Theine cache store and use API with this class.
+    Create new Theine cache store and use API with this class. This class is not thread-safe.
 
     :param policy: eviction policy, "tlfu" and "lru" are the only two supported now.
     :param size: cache size.
     """
 
     def __init__(self, policy: str, size: int):
-        self._cache: Dict[Hashable, CachedValue] = {}
+        self._cache: Dict[str, CachedValue] = {}
         self.core = CORES[policy](size)
-        self._enable_maintenance = True
+        self.key_gen = KeyGen()
         self._maintainer = Thread(target=self.maintenance, daemon=True)
         self._maintainer.start()
 
     def __len__(self) -> int:
         return len(self._cache)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Hashable, default: Any = None) -> Any:
         """
         Retrieve data with cache key. If given key is not in cache, return default value.
 
-        :param key: key string.
+        :param key: key hashable, use str/int for best performance.
         :param default: returned value if key is not found in cache, default None.
         """
-        self.core.access(key)
-        cached = self._cache.get(key, sentinel)
+        auto_key = False
+        key_str = ""
+        if isinstance(key, str):
+            key_str = key
+            self.core.access(key_str)
+        elif isinstance(key, int):
+            key_str = f"{key}"
+            self.core.access(key_str)
+        else:
+            key_str = self.key_gen(key)
+            auto_key = True
+        cached = self._cache.get(key_str, sentinel)
         if cached is sentinel:
+            if auto_key:
+                self.key_gen.remove(key_str)
             return default
         elif cast(CachedValue, cached).expire < time.time():
-            self.delete(key)
+            self.delete(key_str)
+            if auto_key:
+                self.key_gen.remove(key_str)
             return default
+        # For auto generated keys, only access policy if key in cache.
+        # Because remove and add back same key will generate a new string key.
+        elif auto_key:
+            self.core.access(key_str)
         return cast(CachedValue, cached).data
 
     def set(
-        self, key: str, value: Any, ttl: Optional[timedelta] = None
+        self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
     ) -> Optional[str]:
         """
         Add new data to cache. If the key already exists, value will be overwritten.
 
-        :param key: key string.
+        :param key: key hashable, use str/int for best performance.
         :param value: cached value.
-        :param ttl: timedelta to store the data Default is None which means no expiration.
+        :param ttl: timedelta to store the data. Default is None which means no expiration.
         """
+        key_str = ""
+        if isinstance(key, str):
+            key_str = key
+            self.core.access(key_str)
+        elif isinstance(key, int):
+            key_str = f"{key}"
+            self.core.access(key_str)
+        else:
+            key_str = self.key_gen(key)
         now = time.time()
         ts = max(ttl.total_seconds(), 1.0) if ttl is not None else math.inf
         expire = now + ts
         exist = key in self._cache
         v = CachedValue(value, expire)
-        self._cache[key] = v
+        self._cache[key_str] = v
         if expire != math.inf:
-            self.core.schedule(key, int(expire * 1e9))
+            self.core.schedule(key_str, int(expire * 1e9))
         else:
-            self.core.deschedule(key)
+            self.core.deschedule(key_str)
         if exist:
             return None
-        evicted = self.core.set_policy(key)
+        evicted = self.core.set_policy(key_str)
         if evicted is not None:
             self._cache.pop(evicted, None)
+            if evicted[:6] == "_auto:":
+                self.key_gen.remove(evicted)
             return evicted
         return None
 
-    def delete(self, key: str) -> bool:
+    def delete(self, key: Hashable) -> bool:
         """
         Remove key from cache. Return True if given key exists in cache and been deleted.
 
-        :param key: key string.
+        :param key: key hashable, use str/int for best performance.
         """
-        v = self._cache.pop(key, sentinel)
+        key_str = ""
+        if isinstance(key, str):
+            key_str = key
+            self.core.access(key_str)
+        elif isinstance(key, int):
+            key_str = f"{key}"
+            self.core.access(key_str)
+        else:
+            key_str = self.key_gen(key)
+            self.key_gen.remove(key_str)
+        v = self._cache.pop(key_str, sentinel)
         if v is not sentinel:
-            self.core.remove(key)
+            self.core.remove(key_str)
             return True
         return False
+
+    def _delete_str(self, key: str):
+        if key[:6] == "_auto:":
+            self.key_gen.remove(key)
+        self._cache.pop(key, None)
 
     def maintenance(self):
         """
         Remove expired keys.
         """
         while True:
-            if self._enable_maintenance:
-                self.core.advance(time.time_ns(), self._cache)
+            self.core.advance(
+                time.time_ns(), self._cache, self.key_gen.kh, self.key_gen.hk
+            )
             time.sleep(0.5)

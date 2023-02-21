@@ -34,7 +34,9 @@ pip install theine
 
 ## API
 
-Key should be a **str**, and value can be any **Python object**.
+Key should be a **Hashable** object, and value can be any **Python object**. If key type is not **str/int**, Theine will generate a unique key string automatically, this unique str will be stored in memory as metadata and cost some memory, also add overhead to cleanup metadata.
+
+Please be aware the Cache class is **not** thread-safe.
 
 ```Python
 from theine import Cache
@@ -122,7 +124,6 @@ await foo_a(1)
 
 **Cons**
 - Worse performance: around 18ms/10k requests.
-- Auto removal of stale keys is disabled due to current implementation.
 - Unexpected memory usage. The auto key function use same methods as Python's lru_cache. Take a look [this issue](https://github.com/python/cpython/issues/88476) or [this one](https://github.com/python/cpython/issues/64058).
 
 

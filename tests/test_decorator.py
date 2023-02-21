@@ -311,13 +311,17 @@ def test_timeout_auto_key():
         result = foo_to_auto(i, mock)
         assert result["id"] == i
     assert len(foo_to_auto._cache) == 30
-    assert mock.call_count == 30
-    sleep(5)
-    assert len(foo_to_auto._cache) == 30
-    for i in range(30):
-        result = foo_to_auto(i, mock)
-        assert result["id"] == i
-    assert mock.call_count == 60
+    assert foo_to_auto._cache.key_gen.len() == 30
+    current = 30
+    counter = 0
+    while True:
+        sleep(5)
+        counter += 1
+        assert len(foo_to._cache) < current
+        current = len(foo_to._cache)
+        if current == 0:
+            break
+    assert foo_to_auto._cache.key_gen.len() == 0
 
 
 def test_cache_full_evict():
@@ -326,8 +330,7 @@ def test_cache_full_evict():
         result = foo_to_auto(i, mock)
         assert result["id"] == i
     assert len(foo_to_auto._cache) == 1000
-    assert len(foo_to_auto._hk_map) == 1000
-    assert len(foo_to_auto._kh_map) == 1000
+    assert foo_to_auto._cache.key_gen.len() == 1000
 
 
 def test_cache_full_auto_key_sync_multi():
@@ -346,8 +349,7 @@ def test_cache_full_auto_key_sync_multi():
         t.join()
 
     assert len(foo_to_auto._cache) == 1000
-    assert len(foo_to_auto._hk_map) == 1000
-    assert len(foo_to_auto._kh_map) == 1000
+    assert foo_to_auto._cache.key_gen.len() == 1000
 
 
 @Memoize(Cache("tlfu", 1000), timeout=None, lock=True)
@@ -360,8 +362,7 @@ def assert_read_key(n: int):
     v = read_auto_key(key)
     assert v == key
     assert len(read_auto_key._cache) < 2000
-    assert len(read_auto_key._hk_map) < 2000
-    assert len(read_auto_key._kh_map) < 2000
+    assert foo_to_auto._cache.key_gen.len() < 2000
     print(".", end="")
 
 
@@ -373,9 +374,4 @@ def test_cocurrency_load():
             exception = future.exception()
             if exception:
                 raise exception
-    print(
-        "==== done ====",
-        len(read_auto_key._cache),
-        len(read_auto_key._hk_map),
-        len(read_auto_key._kh_map),
-    )
+    print("==== done ====", len(read_auto_key._cache), foo_to_auto._cache.key_gen.len())
