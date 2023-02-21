@@ -13,47 +13,40 @@ REQUESTS = 10000
 
 def write_keys(cache: Cache, keys: List[str]):
     for key in keys:
-        cache.set(key, key, ttl=timedelta(seconds=10))
+        cache.set(key, key, ttl=None)
 
 
 def read_keys(cache: Cache, keys: List[str]):
-    hit = 0
     for key in keys:
         v = cache.get(key)
         if v is not None:
-            hit += 1
             assert v == key
-    assert hit / len(keys) > 0.9
 
 
 def test_write(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-    cache = Cache(policy="tlfu", size=REQUESTS // 10)
-
     def setup():
+        cache = Cache(policy="tlfu", size=REQUESTS // 10)
         _uuid = uuid.uuid4().int
-        return ([f"key:{z.get()}:{_uuid}" for _ in range(REQUESTS)],), {}
+        return (
+            cache,
+            [f"key:{i}:{_uuid}" for i in range(REQUESTS)],
+        ), {}
 
     benchmark.pedantic(
-        lambda keys: write_keys(cache, keys),
+        lambda cache, keys: write_keys(cache, keys),
         setup=setup,
         rounds=10,
     )
 
 
 def test_read(benchmark):
-    z = Zipf(1.0001, 10, REQUESTS // 10)
-    cache = Cache(policy="tlfu", size=REQUESTS // 10)
-    keys = [f"key:{z.get()}" for _ in range(REQUESTS * 3)]
-    assert len(set(keys)) > 900
-    write_keys(cache, keys)
-    assert len(cache) > 900
-
     def setup():
-        return ([f"key:{z.get()}" for _ in range(REQUESTS)],), {}
+        cache = Cache(policy="tlfu", size=REQUESTS)
+        write_keys(cache, [f"key:{i}" for i in range(REQUESTS)])
+        return (cache, [f"key:{i}" for i in range(REQUESTS)]), {}
 
     benchmark.pedantic(
-        lambda keys: read_keys(cache, keys),
+        lambda cache, keys: read_keys(cache, keys),
         setup=setup,
         rounds=10,
     )

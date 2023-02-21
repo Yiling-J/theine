@@ -2,7 +2,6 @@ import inspect
 import itertools
 import math
 import time
-import types
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
@@ -11,17 +10,16 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generic,
     Hashable,
     Optional,
     Type,
     TypeVar,
     cast,
-    overload,
 )
 
+
 from theine_core import LruCore, TlfuCore
-from typing_extensions import ParamSpec, Protocol, Self
+from typing_extensions import ParamSpec, Protocol
 
 from theine.models import CachedValue
 
