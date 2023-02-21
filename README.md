@@ -34,7 +34,7 @@ pip install theine
 
 ## API
 
-Key should be a **Hashable** object, and value can be any **Python object**. If key type is not **str/int**, Theine will generate a unique key string automatically, this unique str will be stored in memory as metadata and cost some memory, also add overhead to cleanup metadata.
+Key should be a **Hashable** object, and value can be any **Python object**. If key type is not **str/int**, Theine will generate a unique key string automatically, this unique str will use extra space in memory and increase get/set/remove overhead.
 
 Please be aware the Cache class is **not** thread-safe.
 
@@ -58,7 +58,7 @@ cache.delete("key")
 ```
 
 ## Decorator
-Theine support string keys only, so to use a decorator, a function to convert input signatures to string is necessary. **The recommended way is specifying the function explicitly**, this is approach 1, Theine also support generating key automatically, this is approach 2. I will list pros and cons below.
+Theine support hashable keys, so to use a decorator, a function to convert input signatures to hashable is necessary. **The recommended way is specifying the function explicitly**, this is approach 1, Theine also support generating key automatically, this is approach 2. Same as Theine API, if key function return type is not **str/int**, Theine will generate a unique key string automatically, this unique str will use extra space in memory and increase get/set/remove overhead.
 
 **- explicit key function**
 
@@ -92,7 +92,7 @@ await foo_a(1)
 **Pros**
 - A decorator with both sync and async support, you can replace your lru_cache with Theine now.
 - Thundering herd protection(multithreading: set `lock=True` in `Memoize`, asyncio: always enabled).
-- Type checked. Mypy can check key function to make sure it has same input signature as original function and return a string.
+- Type checked. Mypy can check key function to make sure it has same input signature as original function and return a hashable.
 
 **Cons**
 - You have to use 2 functions.
