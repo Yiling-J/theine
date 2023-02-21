@@ -90,7 +90,8 @@ await foo_a(1)
 ```
 
 **Pros**
-- A decorator with both sync and async support, you can replace your lru_cache with Theine now.
+- Both sync and async support.
+- Explicitly control how key is generated. Most remote cache(redis, memcached...) only allow string keys, return a string in key function make it easier when you want to use remote cache later.
 - Thundering herd protection(multithreading: set `lock=True` in `Memoize`, asyncio: always enabled).
 - Type checked. Mypy can check key function to make sure it has same input signature as original function and return a hashable.
 
