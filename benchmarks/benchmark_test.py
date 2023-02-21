@@ -19,8 +19,7 @@ def write_keys(cache: Cache, keys: List[str]):
 def read_keys(cache: Cache, keys: List[str]):
     for key in keys:
         v = cache.get(key)
-        if v is not None:
-            assert v == key
+        assert v == key
 
 
 def test_write(benchmark):
@@ -59,8 +58,7 @@ def get(key: str):
 def get_many(getter, keys: List[str]):
     for key in keys:
         v = getter(key)
-        if v is not None:
-            assert v == key
+        assert v == key
 
 
 @pytest.fixture(params=["theine_tlfu_auto", "theine_tlfu_custom", "cachetools_lfu"])
