@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.7"
 typing-extensions = "^4.4.0"
-theine-core = "^0.1.8"
+theine-core = "^0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -21,6 +21,8 @@ pytest-asyncio = "^0.20.3"
 cachetools = "^5.3.0"
 types-cachetools = "^5.3.0.0"
 isort = "^5.5.0"
+py-spy = "^0.3.14"
+cacheout = "^0.14.1"
 
 [build-system]
 requires = ["poetry-core"]

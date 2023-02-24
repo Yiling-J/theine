@@ -58,15 +58,6 @@ class Core(Protocol):
     def __init__(self, size: int):
         ...
 
-    def schedule(self, key: str, expire: int):
-        ...
-
-    def deschedule(self, key: str):
-        ...
-
-    def set_policy(self, key: str) -> Optional[str]:
-        ...
-
     def set(self, key: str, expire: int) -> Optional[str]:
         ...
 
@@ -262,10 +253,8 @@ class Cache:
             if auto_key:
                 self.key_gen.remove(key_str)
             return default
-        elif cast(CachedValue, cached).expire < time.time():
-            self.delete(key_str)
-            if auto_key:
-                self.key_gen.remove(key_str)
+        cached = cast(CachedValue, cached)
+        if cached.expire is not None and cached.expire < time.time():
             return default
         # For auto generated keys, only access policy if key in cache.
         # Because remove and add back same key will generate a new string key.
@@ -290,19 +279,17 @@ class Cache:
             key_str = f"{key}"
         else:
             key_str = self.key_gen(key)
-        now = time.time()
-        ts = max(ttl.total_seconds(), 1.0) if ttl is not None else math.inf
-        expire = now + ts
-        exist = key in self._cache
-        v = CachedValue(value, expire)
-        self._cache[key_str] = v
-        if expire != math.inf:
-            self.core.schedule(key_str, int(expire * 1e9))
+
+        if ttl is not None:
+            now = time.time()
+            expire = now + max(ttl.total_seconds(), 1.0)
+            v = CachedValue(value, expire)
         else:
-            self.core.deschedule(key_str)
-        if exist:
-            return None
-        evicted = self.core.set_policy(key_str)
+            v = CachedValue(value, None)
+        self._cache[key_str] = v
+        evicted = self.core.set(
+            key_str, int(v.expire * 1e9) if v.expire is not None else 0
+        )
         if evicted is not None:
             self._cache.pop(evicted, None)
             if evicted[:6] == "_auto:":

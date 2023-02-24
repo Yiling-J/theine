@@ -1,9 +1,10 @@
+import functools
 import uuid
-from datetime import timedelta
 from typing import List
 
 import pytest
-from cachetools import LFUCache, cached
+import cacheout
+from cachetools import LFUCache, cached, LRUCache
 
 from benchmarks.zipf import Zipf
 from theine.thenie import Cache, Memoize
@@ -61,8 +62,26 @@ def get_many(getter, keys: List[str]):
         assert v == key
 
 
-@pytest.fixture(params=["theine_tlfu_auto", "theine_tlfu_custom", "cachetools_lfu"])
+@pytest.fixture(
+    params=[
+        "theine_tlfu_auto",
+        "theine_tlfu_custom",
+        "cachetools_lfu",
+        "cacheout_lfu",
+        "theine_lru_custom",
+        "cachetools_lru",
+        "cacheout_lru",
+    ]
+)
 def cache_func_provider(request):
+    if request.param == "python_lru":
+
+        def _(size):
+            func = functools.lru_cache(size)(get)
+            return func
+
+        return _
+
     if request.param == "theine_tlfu_auto":
 
         def _(size):
@@ -82,11 +101,46 @@ def cache_func_provider(request):
 
         return _
 
+    elif request.param == "theine_lru_custom":
+
+        def _(size):
+            cache = Cache("lru", size)
+            func = Memoize(cache, None)(get)
+            func.key(lambda key: key)
+            return func
+
+        return _
+
     elif request.param == "cachetools_lfu":
 
         def _(size):
             cache = LFUCache(size)
             func = cached(cache)(get)
+            return func
+
+        return _
+
+    elif request.param == "cachetools_lru":
+
+        def _(size):
+            cache = LRUCache(size)
+            func = cached(cache)(get)
+            return func
+
+        return _
+
+    elif request.param == "cacheout_lfu":
+
+        def _(size):
+            func = cacheout.lfu_memoize(size)(get)
+            return func
+
+        return _
+
+    elif request.param == "cacheout_lru":
+
+        def _(size):
+            func = cacheout.lru_memoize(size)(get)
             return func
 
         return _
