@@ -270,7 +270,7 @@ class Cache:
 
         :param key: key hashable, use str/int for best performance.
         :param value: cached value.
-        :param ttl: timedelta to store the data. Default is None which means no expiration.
+        :param ttl: timedelta to store the data. Default is None which means no expiration. Value smaller than 1 second will round to 1 second. Set a negative value will panic.
         """
         key_str = ""
         if isinstance(key, str):
