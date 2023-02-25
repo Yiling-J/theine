@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.2.0]
+### Changed
+- Optimize theine core, 50% throughput improve on set and 20% throughput improve on get
+
+
 ## [0.1.4]
 ### Changed
 - Cache Key can be hashable now
