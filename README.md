@@ -19,6 +19,7 @@ cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
 - [API](#api)
 - [Decorator](#decorator)
 - [Django Cache Backend](#django-cache-backend)
+- [Metadata Memory Overhead](#metadata-memory-overhead)
 - [Benchmarks](#benchmarks)
   * [continuous benchmark](#continuous-benchmark)
   * [10k requests](#10k-requests)
@@ -139,6 +140,9 @@ CACHES = {
     },
 }
 ```
+
+## Metadata Memory Overhead
+Assume your key is 24 bytes long, then each meta key entry in Rust is 92 bytes. For 1 million keys, the total memory overhead is 92 megabytes.
 
 ## Benchmarks
 ### continuous benchmark
