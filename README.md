@@ -155,12 +155,12 @@ Write and Mix Zipf use 1k max cache size, so you can see the high cost of tradit
 
 |                                        | Read     | Write     | Mix Zipf  |
 |----------------------------------------|----------|-----------|-----------|
-| Theine(W-TinyLFU) API                  | 5.34 ms  | 13.10 ms  |           |
-| Theine(W-TinyLFU) Auto-Key Decorator   | 8.90 ms  | 21.69 ms  | 14.75 ms  |
-| Theine(W-TinyLFU) Custom-Key Decorator | 7.79 ms  | 20.95 ms  | 13.58 ms  |
+| Theine(W-TinyLFU) API                  | 3.42 ms  | 10.14 ms  |           |
+| Theine(W-TinyLFU) Auto-Key Decorator   | 7.17 ms  | 18.41 ms  | 13.18 ms  |
+| Theine(W-TinyLFU) Custom-Key Decorator | 6.45 ms  | 17.67 ms  | 11.50 ms  |
 | Cachetools LFU Decorator               | 15.70 ms | 627.10 ms | 191.04 ms |
 | Cacheout LFU Decorator                 | 50.05 ms | 704.70 ms | 250.95 ms |
-| Theine(LRU) Custom-Key Decorator       | 7.14 ms  | 19.36 ms  | 13.53 ms  |
+| Theine(LRU) Custom-Key Decorator       | 5.70 ms  | 16.04 ms  | 10.91 ms  |
 | Cachetools LRU Decorator               | 14.05 ms | 61.06 ms  | 36.89 ms  |
 | Cacheout LRU Decorator                 | 47.90 ms | 94.94 ms  | 68.25 ms  |
 
