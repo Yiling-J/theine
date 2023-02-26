@@ -2,7 +2,7 @@ from datetime import timedelta
 from random import randint
 from time import sleep
 
-from theine.thenie import Cache
+from theine.thenie import Cache, sentinel
 
 
 def test_set():
@@ -46,8 +46,9 @@ def test_set_with_ttl():
         if current <= 30:
             break
     assert counter < 10
+    data = [i for i in cache._cache if i is not sentinel]
     for i in range(30):
-        assert f"key:{i}:2" in cache._cache
+        assert f"key:{i}:2" in data
 
 
 def test_delete():
