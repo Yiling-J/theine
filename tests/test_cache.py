@@ -46,7 +46,7 @@ def test_set_with_ttl():
         if current <= 30:
             break
     assert counter < 10
-    data = [i.data for i in cache._cache if i is not sentinel]
+    data = [i for i in cache._cache if i is not sentinel]
     for i in range(30):
         assert f"key:{i}:2" in data
 

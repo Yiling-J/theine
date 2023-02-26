@@ -22,7 +22,6 @@ from typing import (
 from theine_core import LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol
 
-from theine.models import CachedValue
 
 sentinel = object()
 
@@ -261,7 +260,7 @@ class Cache:
                 self.key_gen.remove(key_str)
             return default
 
-        return cast(CachedValue, self._cache[index]).data
+        return self._cache[index]
 
     def _access(self, key: Hashable, ttl: Optional[timedelta] = None):
         key_str = ""
@@ -296,17 +295,14 @@ class Cache:
         else:
             key_str = self.key_gen(key)
 
+        expire = None
         if ttl is not None:
             now = time.time()
             expire = now + max(ttl.total_seconds(), 1.0)
-            v = CachedValue(value, expire)
-        else:
-            v = CachedValue(value, None)
-
         index, evicted_index, evicted_key = self.core.set(
-            key_str, int(v.expire * 1e9) if v.expire is not None else 0
+            key_str, int(expire * 1e9) if expire is not None else 0
         )
-        self._cache[index] = v
+        self._cache[index] = value
         if evicted_index is not None:
             self._cache[evicted_index] = sentinel
             if evicted_key and evicted_key[:6] == "_auto:":
