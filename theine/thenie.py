@@ -1,6 +1,5 @@
 import inspect
 import itertools
-import math
 import time
 from dataclasses import dataclass
 from datetime import timedelta
@@ -11,7 +10,9 @@ from typing import (
     Callable,
     Dict,
     Hashable,
+    List,
     Optional,
+    Tuple,
     Type,
     TypeVar,
     cast,
@@ -58,16 +59,19 @@ class Core(Protocol):
     def __init__(self, size: int):
         ...
 
-    def set(self, key: str, expire: int) -> Optional[str]:
+    def set(self, key: str, expire: int) -> Tuple[int, Optional[int], Optional[str]]:
         ...
 
-    def remove(self, key: str):
+    def remove(self, key: str) -> Optional[int]:
         ...
 
-    def access(self, key: str):
+    def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, now: int, cache: Dict, kh: Dict, hk: Dict):
+    def advance(self, now: int, cache: List, sentinel: Any, kh: Dict, hk: Dict):
+        ...
+
+    def clear(self):
         ...
 
 
@@ -221,14 +225,18 @@ class Cache:
     """
 
     def __init__(self, policy: str, size: int):
-        self._cache: Dict[str, CachedValue] = {}
+        self._cache: List[Any] = [sentinel] * (size + 500)
         self.core = CORES[policy](size)
         self.key_gen = KeyGen()
         self._maintainer = Thread(target=self.maintenance, daemon=True)
         self._maintainer.start()
 
     def __len__(self) -> int:
-        return len(self._cache)
+        _count = 0
+        for i in self._cache:
+            if i is not sentinel:
+                _count += 1
+        return _count
 
     def get(self, key: Hashable, default: Any = None) -> Any:
         """
@@ -241,26 +249,34 @@ class Cache:
         key_str = ""
         if isinstance(key, str):
             key_str = key
-            self.core.access(key_str)
         elif isinstance(key, int):
             key_str = f"{key}"
-            self.core.access(key_str)
         else:
             key_str = self.key_gen(key)
             auto_key = True
-        cached = self._cache.get(key_str, sentinel)
-        if cached is sentinel:
+
+        index = self.core.access(key_str)
+        if index is None:
             if auto_key:
                 self.key_gen.remove(key_str)
             return default
-        cached = cast(CachedValue, cached)
-        if cached.expire is not None and cached.expire < time.time():
-            return default
-        # For auto generated keys, only access policy if key in cache.
-        # Because remove and add back same key will generate a new string key.
-        elif auto_key:
-            self.core.access(key_str)
-        return cast(CachedValue, cached).data
+
+        return cast(CachedValue, self._cache[index]).data
+
+    def _access(self, key: Hashable, ttl: Optional[timedelta] = None):
+        key_str = ""
+        if isinstance(key, str):
+            key_str = key
+        elif isinstance(key, int):
+            key_str = f"{key}"
+        else:
+            key_str = self.key_gen(key)
+
+        expire = None
+        if ttl is not None:
+            now = time.time()
+            expire = now + max(ttl.total_seconds(), 1.0)
+        self.core.set(key_str, int(expire * 1e9) if expire is not None else 0)
 
     def set(
         self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
@@ -286,15 +302,16 @@ class Cache:
             v = CachedValue(value, expire)
         else:
             v = CachedValue(value, None)
-        self._cache[key_str] = v
-        evicted = self.core.set(
+
+        index, evicted_index, evicted_key = self.core.set(
             key_str, int(v.expire * 1e9) if v.expire is not None else 0
         )
-        if evicted is not None:
-            self._cache.pop(evicted, None)
-            if evicted[:6] == "_auto:":
-                self.key_gen.remove(evicted)
-            return evicted
+        self._cache[index] = v
+        if evicted_index is not None:
+            self._cache[evicted_index] = sentinel
+            if evicted_key and evicted_key[:6] == "_auto:":
+                self.key_gen.remove(evicted_key)
+            return evicted_key
         return None
 
     def delete(self, key: Hashable) -> bool:
@@ -311,16 +328,12 @@ class Cache:
         else:
             key_str = self.key_gen(key)
             self.key_gen.remove(key_str)
-        v = self._cache.pop(key_str, sentinel)
-        if v is not sentinel:
-            self.core.remove(key_str)
+
+        index = self.core.remove(key_str)
+        if index is not None:
+            self._cache[index] = sentinel
             return True
         return False
-
-    def _delete_str(self, key: str):
-        if key[:6] == "_auto:":
-            self.key_gen.remove(key)
-        self._cache.pop(key, None)
 
     def maintenance(self):
         """
@@ -328,6 +341,10 @@ class Cache:
         """
         while True:
             self.core.advance(
-                time.time_ns(), self._cache, self.key_gen.kh, self.key_gen.hk
+                time.time_ns(), self._cache, sentinel, self.key_gen.kh, self.key_gen.hk
             )
             time.sleep(0.5)
+
+    def clear(self):
+        self.core.clear()
+        self._cache = [sentinel] * len(self._cache)

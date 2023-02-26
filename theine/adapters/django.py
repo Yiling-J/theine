@@ -1,11 +1,12 @@
 import time
 from datetime import timedelta
 from threading import Lock
-from typing import Optional, cast
+from typing import DefaultDict, Optional, cast
 
 from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
 
 from theine import Cache as Theine
+from theine.thenie import sentinel
 
 
 class Cache(BaseCache):
@@ -19,9 +20,10 @@ class Cache(BaseCache):
         return timeout
 
     def add(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):
-        key = self.make_key(key, version)
-        if key in self.cache._cache and self.cache._cache[key].expire > time.time():
+        data = self.get(key, sentinel, version)
+        if data is not sentinel:
             return False
+        key = self.make_key(key, version)
         self.cache.set(
             key,
             value,
@@ -48,18 +50,25 @@ class Cache(BaseCache):
         )
 
     def touch(self, key, timeout=DEFAULT_TIMEOUT, version=None):
+        data = self.get(key, sentinel, version)
+        if data is sentinel:
+            return False
         nkey = self.make_key(key, version)
-        if nkey in self.cache._cache:
-            with Lock():
-                self.set(key, self.cache._cache[nkey].data, timeout, version)
+        if (
+            timeout is not DEFAULT_TIMEOUT
+            and timeout is not None
+            and cast(float, timeout) <= 0
+        ):
+            self.cache.delete(nkey)
             return True
-        return False
+        to = self._timeout_seconds(timeout)
+        with Lock():
+            self.cache._access(nkey, timedelta(seconds=to) if to is not None else None)
+        return True
 
     def delete(self, key, version=None):
         key = self.make_key(key, version)
         return self.cache.delete(key)
 
     def clear(self):
-        for key in self.cache._cache:
-            self.cache.core.remove(cast(str, key))
-        self.cache._cache = {}
+        self.cache.clear()
