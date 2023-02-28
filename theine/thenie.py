@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import itertools
 import time
@@ -73,6 +74,9 @@ class Core(Protocol):
     def clear(self):
         ...
 
+    def len(self) -> int:
+        ...
+
 
 CORES: Dict[str, Type[Core]] = {
     "tlfu": TlfuCore,
@@ -81,7 +85,6 @@ CORES: Dict[str, Type[Core]] = {
 
 P = ParamSpec("P")
 R = TypeVar("R", covariant=True)
-_unset = object()
 
 
 @dataclass
@@ -91,14 +94,26 @@ class EventData:
 
 
 # https://github.com/python/cpython/issues/90780
+# use event to protect from thundering herd
 class CachedAwaitable:
     def __init__(self, awaitable):
         self.awaitable = awaitable
-        self.result = _unset
+        self.event = None
+        self.result = sentinel
 
     def __await__(self):
-        if self.result is _unset:
-            self.result = yield from self.awaitable.__await__()
+        if self.result is not sentinel:
+            return self.result
+
+        if self.event is None:
+            self.event = asyncio.Event()
+            result = yield from self.awaitable.__await__()
+            self.result = result
+            self.event.set()
+            self.event = None
+            return result
+        else:
+            yield from self.event.wait().__await__()
         return self.result
 
 
@@ -231,11 +246,7 @@ class Cache:
         self._maintainer.start()
 
     def __len__(self) -> int:
-        _count = 0
-        for i in self._cache:
-            if i is not sentinel:
-                _count += 1
-        return _count
+        return self.core.len()
 
     def get(self, key: Hashable, default: Any = None) -> Any:
         """

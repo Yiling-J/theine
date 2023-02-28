@@ -37,6 +37,7 @@ def _() -> str:
 @Memoize(Cache("tlfu", 1000), None)
 async def async_foo(id: int, m: Mock) -> Dict:
     m(id)
+    await asyncio.sleep(1)
     return {"id": id}
 
 
@@ -58,6 +59,7 @@ class Bar:
     @Memoize(Cache("tlfu", 1000), None)
     async def async_foo(self, id: int, m: Mock) -> Dict:
         m(id)
+        await asyncio.sleep(1)
         return {"id": id}
 
     @async_foo.key
@@ -91,6 +93,7 @@ class Bar:
     @Memoize(Cache("tlfu", 1000), None)
     async def async_foo_auto(self, id: int, m: Mock) -> Dict:
         m(id)
+        await asyncio.sleep(1)
         return {"id": id}
 
 
