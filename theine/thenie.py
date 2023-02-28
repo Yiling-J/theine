@@ -1,10 +1,11 @@
+import asyncio
 import inspect
 import itertools
 import time
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from typing import (
     Any,
     Callable,
@@ -91,14 +92,16 @@ class EventData:
 
 
 # https://github.com/python/cpython/issues/90780
+# wrap coro function in a task so we can await multiple times
 class CachedAwaitable:
     def __init__(self, awaitable):
-        self.awaitable = awaitable
+        self.awaitable = asyncio.create_task(awaitable)
         self.result = _unset
 
     def __await__(self):
         if self.result is _unset:
-            self.result = yield from self.awaitable.__await__()
+            yield from self.awaitable.__await__()
+            self.result = self.awaitable.result()
         return self.result
 
 

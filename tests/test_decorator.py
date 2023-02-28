@@ -37,6 +37,7 @@ def _() -> str:
 @Memoize(Cache("tlfu", 1000), None)
 async def async_foo(id: int, m: Mock) -> Dict:
     m(id)
+    await asyncio.sleep(1)
     return {"id": id}
 
 
