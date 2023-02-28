@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
-from threading import Event, Lock, Thread
+from threading import Event, Thread
 from typing import (
     Any,
     Callable,
