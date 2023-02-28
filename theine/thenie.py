@@ -82,7 +82,6 @@ CORES: Dict[str, Type[Core]] = {
 
 P = ParamSpec("P")
 R = TypeVar("R", covariant=True)
-_unset = object()
 
 
 @dataclass
@@ -96,13 +95,10 @@ class EventData:
 class CachedAwaitable:
     def __init__(self, awaitable):
         self.awaitable = asyncio.create_task(awaitable)
-        self.result = _unset
 
     def __await__(self):
-        if self.result is _unset:
-            yield from self.awaitable.__await__()
-            self.result = self.awaitable.result()
-        return self.result
+        r = yield from self.awaitable.__await__()
+        return r
 
 
 class Key:
