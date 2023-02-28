@@ -74,6 +74,9 @@ class Core(Protocol):
     def clear(self):
         ...
 
+    def len(self) -> int:
+        ...
+
 
 CORES: Dict[str, Type[Core]] = {
     "tlfu": TlfuCore,
@@ -230,11 +233,7 @@ class Cache:
         self._maintainer.start()
 
     def __len__(self) -> int:
-        _count = 0
-        for i in self._cache:
-            if i is not sentinel:
-                _count += 1
-        return _count
+        return self.core.len()
 
     def get(self, key: Hashable, default: Any = None) -> Any:
         """
