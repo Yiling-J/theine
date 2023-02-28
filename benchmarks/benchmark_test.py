@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import uuid
 from typing import List
@@ -56,9 +57,19 @@ def get(key: str):
     return key
 
 
+async def get_async(key: str):
+    return key
+
+
 def get_many(getter, keys: List[str]):
     for key in keys:
         v = getter(key)
+        assert v == key
+
+
+async def get_many_async(getter, keys: List[str]):
+    for key in keys:
+        v = await getter(key)
         assert v == key
 
 
@@ -161,6 +172,56 @@ def test_decorator_read(benchmark, cache_func_provider):
 
     benchmark.pedantic(
         lambda func, keys: get_many(func, keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
+def test_decorator_read_async(benchmark):
+    loop = asyncio.events.new_event_loop()
+
+    def _f(size):
+        cache = Cache("tlfu", size)
+        func = Memoize(cache, None)(get_async)
+        func.key(lambda key: key)
+        return func
+
+    def setup():
+        func = _f(REQUESTS)
+        keys = [f"key:{i}" for i in range(REQUESTS)]
+        for key in keys:
+            loop.run_until_complete(func(key))
+        return (
+            func,
+            keys,
+        ), {}
+
+    benchmark.pedantic(
+        lambda func, keys: loop.run_until_complete(get_many_async(func, keys)),
+        setup=setup,
+        rounds=10,
+    )
+
+
+def test_decorator_write_async(benchmark):
+    loop = asyncio.events.new_event_loop()
+
+    def _f(size):
+        cache = Cache("tlfu", size)
+        func = Memoize(cache, None)(get_async)
+        func.key(lambda key: key)
+        return func
+
+    def setup():
+        func = _f(REQUESTS // 10)
+        keys = [f"key:{i}" for i in range(REQUESTS)]
+        return (
+            func,
+            keys,
+        ), {}
+
+    benchmark.pedantic(
+        lambda func, keys: loop.run_until_complete(get_many_async(func, keys)),
         setup=setup,
         rounds=10,
     )

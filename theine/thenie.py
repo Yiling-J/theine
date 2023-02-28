@@ -93,6 +93,30 @@ class EventData:
     data: Any
 
 
+# https://github.com/python/cpython/issues/90780
+# use event to protect from thundering herd
+class CachedAwaitable:
+    def __init__(self, awaitable):
+        self.awaitable = awaitable
+        self.event = None
+        self.result = sentinel
+
+    def __await__(self):
+        if self.result is not sentinel:
+            return self.result
+
+        if self.event is None:
+            self.event = asyncio.Event()
+            result = yield from self.awaitable.__await__()
+            self.result = result
+            self.event.set()
+            self.event = None
+            return result
+        else:
+            yield from self.event.wait().__await__()
+        return self.result
+
+
 class Key:
     def __init__(self):
         self.key: Optional[str] = None
@@ -143,7 +167,7 @@ def Wrapper(
         if _coro:
             result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = asyncio.create_task(_func(*args, **kwargs))  # type: ignore
+                result = CachedAwaitable(_func(*args, **kwargs))
                 _cache.set(key, result, _timeout)
             return cast(R, result)
 
