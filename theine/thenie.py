@@ -93,17 +93,6 @@ class EventData:
     data: Any
 
 
-# https://github.com/python/cpython/issues/90780
-# wrap coro function in a task so we can await multiple times
-class CachedAwaitable:
-    def __init__(self, awaitable):
-        self.awaitable = asyncio.create_task(awaitable)
-
-    def __await__(self):
-        r = yield from self.awaitable.__await__()
-        return r
-
-
 class Key:
     def __init__(self):
         self.key: Optional[str] = None
@@ -154,7 +143,7 @@ def Wrapper(
         if _coro:
             result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = CachedAwaitable(_func(*args, **kwargs))
+                result = asyncio.create_task(_func(*args, **kwargs))  # type: ignore
                 _cache.set(key, result, _timeout)
             return cast(R, result)
 
