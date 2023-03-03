@@ -8,6 +8,6 @@ benchmark:
 
 .PHONY: lint
 lint:
-	poetry run mypy --ignore-missing-imports .
+	poetry run mypy --check-untyped-defs --ignore-missing-imports .
 trace_bench:
 	poetry run python -m benchmarks.trace_bench

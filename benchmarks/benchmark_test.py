@@ -125,7 +125,7 @@ def cache_func_provider(request):
     elif request.param == "cachetools_lfu":
 
         def _(size):
-            cache = LFUCache(size)
+            cache = LFUCache(size)  # type: ignore
             func = cached(cache)(get)
             return func
 
@@ -134,7 +134,7 @@ def cache_func_provider(request):
     elif request.param == "cachetools_lru":
 
         def _(size):
-            cache = LRUCache(size)
+            cache = LRUCache(size)  # type: ignore
             func = cached(cache)(get)
             return func
 

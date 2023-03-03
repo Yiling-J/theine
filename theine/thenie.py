@@ -48,10 +48,10 @@ def KeyGen():
     def _len() -> int:
         return len(hk_map)
 
-    gen.remove = _remove
-    gen.len = _len
-    gen.kh = kh_map
-    gen.hk = hk_map
+    gen.remove = _remove  # type: ignore
+    gen.len = _len  # type: ignore
+    gen.kh = kh_map  # type: ignore
+    gen.hk = hk_map  # type: ignore
     return gen
 
 
@@ -129,7 +129,7 @@ class Cached(Protocol[P, R]):
     def key(self, fn: Callable[P, Hashable]):
         ...
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+    def __call__(self, *args, **kwargs) -> R:
         ...
 
 
