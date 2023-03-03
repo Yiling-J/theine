@@ -32,8 +32,6 @@ jobs:
       - name: "Install Dependencies"
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: "poetry install --no-interaction --no-root"
-      - name: "Run Lint"
-        run: "poetry run mypy --ignore-missing-imports ."
       - name: "Run Benchmarks"
         run: "poetry run pytest benchmarks/benchmark_test.py --benchmark-only --benchmark-json output.json"
       - name: "Publish Benchmark Result"

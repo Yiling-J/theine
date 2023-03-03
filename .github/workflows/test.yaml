@@ -38,7 +38,9 @@ jobs:
       - name: "Install Dependencies"
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: "poetry install --no-interaction --no-root"
+      - name: "Run Lint"
+        run: "make lint"
       - name: "Run Tests"
         env:
           CI: "TRUE"
-        run: "poetry run pytest"
+        run: "make test"
