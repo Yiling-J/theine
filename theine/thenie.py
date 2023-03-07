@@ -98,22 +98,22 @@ class EventData:
 class CachedAwaitable:
     def __init__(self, awaitable):
         self.awaitable = awaitable
-        self.event = None
+        self.future = None
         self.result = sentinel
 
     def __await__(self):
         if self.result is not sentinel:
             return self.result
 
-        if self.event is None:
-            self.event = asyncio.Event()
+        if self.future is None:
+            self.future = asyncio.Future()
             result = yield from self.awaitable.__await__()
             self.result = result
-            self.event.set()
-            self.event = None
+            self.future.set_result(self.result)
+            self.future = None
             return result
         else:
-            yield from self.event.wait().__await__()
+            yield from self.future.__await__()
         return self.result
 
 
