@@ -38,6 +38,18 @@ tests = ["attrs[tests-no-zope]", "zope.interface"]
 tests-no-zope = ["cloudpickle", "cloudpickle", "hypothesis", "hypothesis", "mypy (>=0.971,<0.990)", "mypy (>=0.971,<0.990)", "pympler", "pympler", "pytest (>=4.3.0)", "pytest (>=4.3.0)", "pytest-mypy-plugins", "pytest-mypy-plugins", "pytest-xdist[psutil]", "pytest-xdist[psutil]"]
 
 [[package]]
+name = "bounded-zipf"
+version = "1.0.0"
+description = "a bounded zipf generator ported from Go"
+category = "dev"
+optional = false
+python-versions = ">=3.7,<4.0"
+files = [
+    {file = "bounded_zipf-1.0.0-py3-none-any.whl", hash = "sha256:1b93fa39568dfa8d83763b2eb7cf67f9a7667a9dcbde12e964a072e905b4eeca"},
+    {file = "bounded_zipf-1.0.0.tar.gz", hash = "sha256:f5377e2353ea30f3dfdfdce1f4f175f94d8b7b51711795bccc96a3b827581335"},
+]
+
+[[package]]
 name = "cacheout"
 version = "0.14.1"
 description = "A caching library for Python"
@@ -510,4 +522,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7"
-content-hash = "1c258e95a191fd28e1a337883a4fa27c3bd9ca1250500f664a5d982cda2e0a45"
+content-hash = "c0c1995de44af53c737391c89c25920c3938bdaf30a4655b670f9106ddf6bd01"

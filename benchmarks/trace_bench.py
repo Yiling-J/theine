@@ -5,7 +5,7 @@ from typing import Callable, Iterable
 from unittest.mock import Mock
 
 from cachetools import LFUCache, cached
-from .zipf import Zipf
+from bounded_zipf import Zipf
 
 from theine import Cache, Memoize
 

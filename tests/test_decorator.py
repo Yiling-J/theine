@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from benchmarks.zipf import Zipf
+from bounded_zipf import Zipf
 from theine import Cache, Memoize
 
 
