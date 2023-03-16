@@ -6,7 +6,7 @@ from time import sleep
 from theine.thenie import Cache, sentinel
 
 
-@pytest.fixture(params=["lru", "tlfu"])
+@pytest.fixture(params=["lru", "tlfu", "clockpro"])
 def policy(request):
     return request.param
 
@@ -32,6 +32,14 @@ def test_set(policy):
     sleep(1)
     cache.set("foo", "bar")
     assert len(cache) == 100
+
+
+def test_set_cache_size(policy):
+    cache = Cache(policy, 500)
+    for _ in range(100000):
+        i = randint(0, 100000)
+        cache.set(f"key:{i}", i)
+    assert len([i for i in cache._cache if i is not sentinel]) == 500
 
 
 def test_set_with_ttl(policy):

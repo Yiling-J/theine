@@ -14,13 +14,14 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
     TypeVar,
+    Union,
     cast,
+    Type,
 )
 
 
-from theine_core import LruCore, TlfuCore
+from theine_core import LruCore, TlfuCore, ClockProCore
 from typing_extensions import ParamSpec, Protocol
 
 
@@ -78,9 +79,35 @@ class Core(Protocol):
         ...
 
 
-CORES: Dict[str, Type[Core]] = {
+class ClockProCoreP(Protocol):
+    def __init__(self, size: int):
+        ...
+
+    def set(
+        self, key: str, expire: int
+    ) -> Tuple[int, Optional[int], Optional[int], Optional[str]]:
+        ...
+
+    def remove(self, key: str) -> Optional[int]:
+        ...
+
+    def access(self, key: str) -> Optional[int]:
+        ...
+
+    def advance(self, now: int, cache: List, sentinel: Any, kh: Dict, hk: Dict):
+        ...
+
+    def clear(self):
+        ...
+
+    def len(self) -> int:
+        ...
+
+
+CORES: Dict[str, Union[Type[Core], Type[ClockProCoreP]]] = {
     "tlfu": TlfuCore,
     "lru": LruCore,
+    "clockpro": ClockProCore,
 }
 
 P = ParamSpec("P")
@@ -241,6 +268,11 @@ class Cache:
     def __init__(self, policy: str, size: int):
         self._cache: List[Any] = [sentinel] * (size + 500)
         self.core = CORES[policy](size)
+        if policy == "clockpro":
+            # clockpro use 2x metadata space, so need to initial 2x space for cache list
+            # half of cache list will be sentinel(test page in clock pro)
+            self._cache = [sentinel] * (2 * size + 500)
+            setattr(self, "set", self._set_clockpro)
         self.key_gen = KeyGen()
         self._maintainer = Thread(target=self.maintenance, daemon=True)
         self._maintainer.start()
@@ -298,6 +330,7 @@ class Cache:
         :param value: cached value.
         :param ttl: timedelta to store the data. Default is None which means no expiration. Value smaller than 1 second will round to 1 second. Set a negative value will panic.
         """
+        self.core = cast(Core, self.core)
         key_str = ""
         if isinstance(key, str):
             key_str = key
@@ -314,6 +347,43 @@ class Cache:
             key_str, int(expire * 1e9) if expire is not None else 0
         )
         self._cache[index] = value
+        if evicted_index is not None:
+            self._cache[evicted_index] = sentinel
+            if evicted_key and evicted_key[:6] == "_auto:":
+                self.key_gen.remove(evicted_key)
+            return evicted_key
+        return None
+
+    # clockpro core set has different set ouput signature
+    def _set_clockpro(
+        self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
+    ) -> Optional[str]:
+        """
+        Add new data to cache. If the key already exists, value will be overwritten.
+
+        :param key: key hashable, use str/int for best performance.
+        :param value: cached value.
+        :param ttl: timedelta to store the data. Default is None which means no expiration. Value smaller than 1 second will round to 1 second. Set a negative value will panic.
+        """
+        self.core = cast(ClockProCore, self.core)
+        key_str = ""
+        if isinstance(key, str):
+            key_str = key
+        elif isinstance(key, int):
+            key_str = f"{key}"
+        else:
+            key_str = self.key_gen(key)
+
+        expire = None
+        if ttl is not None:
+            now = time.time()
+            expire = now + max(ttl.total_seconds(), 1.0)
+        index, test_index, evicted_index, evicted_key = self.core.set(
+            key_str, int(expire * 1e9) if expire is not None else 0
+        )
+        self._cache[index] = value
+        if test_index is not None:
+            self._cache[test_index] = sentinel
         if evicted_index is not None:
             self._cache[evicted_index] = sentinel
             if evicted_key and evicted_key[:6] == "_auto:":
