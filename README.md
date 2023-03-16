@@ -2,7 +2,7 @@
 High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
 
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
-- High hit ratio with [W-TinyLFU eviction policy](https://arxiv.org/pdf/1512.00727.pdf)
+- High hit ratio with [W-TinyLFU](https://arxiv.org/pdf/1512.00727.pdf) or [Clock-Pro](https://static.usenix.org/event/usenix05/tech/general/full_papers/jiang/jiang_html/html.html) eviction policy
 - Expired data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
 
   > TTL must be considered in in-memory caching because
@@ -43,6 +43,7 @@ Please be aware the Cache class is **not** thread-safe.
 from theine import Cache
 from datetime import timedelta
 
+# tlfu is the eviction policy, Theine provide 3 policies lru/tlfu/clockpro
 cache = Cache("tlfu", 10000)
 # without default, return None on miss
 v = cache.get("key")
