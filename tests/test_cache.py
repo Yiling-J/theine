@@ -6,7 +6,7 @@ from time import sleep
 from theine.thenie import Cache, sentinel
 
 
-@pytest.fixture(params=["lru", "tlfu"])
+@pytest.fixture(params=["lru", "tlfu", "clockpro"])
 def policy(request):
     return request.param
 

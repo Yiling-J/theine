@@ -53,6 +53,35 @@ def test_read(benchmark):
     )
 
 
+def test_write_clockpro(benchmark):
+    def setup():
+        cache = Cache(policy="clockpro", size=REQUESTS // 10)
+        _uuid = uuid.uuid4().int
+        return (
+            cache,
+            [f"key:{i}:{_uuid}" for i in range(REQUESTS)],
+        ), {}
+
+    benchmark.pedantic(
+        lambda cache, keys: write_keys(cache, keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
+def test_read_clockpro(benchmark):
+    def setup():
+        cache = Cache(policy="clockpro", size=REQUESTS)
+        write_keys(cache, [f"key:{i}" for i in range(REQUESTS)])
+        return (cache, [f"key:{i}" for i in range(REQUESTS)]), {}
+
+    benchmark.pedantic(
+        lambda cache, keys: read_keys(cache, keys),
+        setup=setup,
+        rounds=10,
+    )
+
+
 def get(key: str):
     return key
 
