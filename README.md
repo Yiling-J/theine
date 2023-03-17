@@ -36,13 +36,13 @@ pip install theine
 
 ## Cache Eviction Policies
 
-Theine provide 3 built-in cache eviction policies:
+Theine provides 3 built in cache eviction policies:
 
-### LRU
+#### LRU
 
 Discards the least recently used items first.
 
-### W-TinyLFU
+#### W-TinyLFU
 
 An approximate LFU policy in order to boost the effectiveness of caches subject to skewed access distributions.
 
@@ -51,7 +51,7 @@ Reference:
 https://arxiv.org/pdf/1512.00727.pdf
 
 
-### Clock-PRO
+#### Clock-PRO
 
 An improved CLOCK replacement policy(CLOCK: an approximation of LRU).
 
