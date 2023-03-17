@@ -16,6 +16,7 @@ cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
 
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Cache Eviction Policies](#cache-eviction-policies)
 - [API](#api)
 - [Decorator](#decorator)
 - [Django Cache Backend](#django-cache-backend)
@@ -32,6 +33,32 @@ Python 3.7+
 ```
 pip install theine
 ```
+
+## Cache Eviction Policies
+
+Theine provide 3 built-in cache eviction policies:
+
+### LRU
+
+Discards the least recently used items first.
+
+### W-TinyLFU
+
+An approximate LFU policy in order to boost the effectiveness of caches subject to skewed access distributions.
+
+Reference:
+
+https://arxiv.org/pdf/1512.00727.pdf
+
+
+### Clock-PRO
+
+An improved CLOCK replacement policy(CLOCK: an approximation of LRU).
+
+Reference:
+
+https://static.usenix.org/event/usenix05/tech/general/full_papers/jiang/jiang_html/html.html
+
 
 ## API
 
@@ -143,9 +170,14 @@ CACHES = {
 ```
 
 ## Metadata Memory Overhead
-Assume your key is 24 bytes long, then each meta key entry in Rust is 92 bytes. For 1 million keys, the total memory overhead is 92 megabytes.
+Assume your key is 24 bytes long, then each meta key entry in Rust is 92 bytes. For 1 million keys, the total memory overhead is 92 megabytes. Clock-Pro will use **2x** meta space, which is 184 megabytes.
 
 ## Benchmarks
+
+Python version: 3.11
+
+OS: Ubuntu 22.04.2 LTS
+
 ### continuous benchmark
 https://github.com/Yiling-J/cacheme-benchmark
 
@@ -160,6 +192,7 @@ Write and Mix Zipf use 1k max cache size, so you can see the high cost of tradit
 
 |                                        | Read     | Write     | Mix Zipf  |
 |----------------------------------------|----------|-----------|-----------|
+| Theine(Clock-Pro) API                  | 3.07 ms  | 9.86 ms   |           |
 | Theine(W-TinyLFU) API                  | 3.42 ms  | 10.14 ms  |           |
 | Theine(W-TinyLFU) Auto-Key Decorator   | 7.17 ms  | 18.41 ms  | 13.18 ms  |
 | Theine(W-TinyLFU) Custom-Key Decorator | 6.45 ms  | 17.67 ms  | 11.50 ms  |
