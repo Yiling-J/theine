@@ -6,24 +6,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
 from threading import Event, Thread
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Hashable,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-    cast,
-    Type,
-)
+from typing import (Any, Callable, Dict, Hashable, List, Optional, Tuple, Type,
+                    TypeVar, Union, cast)
 
-
-from theine_core import LruCore, TlfuCore, ClockProCore
+from theine_core import ClockProCore, LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol
 
+from theine.exceptions import InvalidTTL
 
 sentinel = object()
 
@@ -60,7 +49,7 @@ class Core(Protocol):
     def __init__(self, size: int):
         ...
 
-    def set(self, key: str, expire: int) -> Tuple[int, Optional[int], Optional[str]]:
+    def set(self, key: str, ttl: int) -> Tuple[int, Optional[int], Optional[str]]:
         ...
 
     def remove(self, key: str) -> Optional[int]:
@@ -69,7 +58,7 @@ class Core(Protocol):
     def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, now: int, cache: List, sentinel: Any, kh: Dict, hk: Dict):
+    def advance(self, cache: List, sentinel: Any, kh: Dict, hk: Dict):
         ...
 
     def clear(self):
@@ -84,7 +73,7 @@ class ClockProCoreP(Protocol):
         ...
 
     def set(
-        self, key: str, expire: int
+        self, key: str, ttl: int
     ) -> Tuple[int, Optional[int], Optional[int], Optional[str]]:
         ...
 
@@ -94,7 +83,7 @@ class ClockProCoreP(Protocol):
     def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, now: int, cache: List, sentinel: Any, kh: Dict, hk: Dict):
+    def advance(self, cache: List, sentinel: Any, kh: Dict, hk: Dict):
         ...
 
     def clear(self):
@@ -314,11 +303,13 @@ class Cache:
         else:
             key_str = self.key_gen(key)
 
-        expire = None
+        ttl_ns = None
         if ttl is not None:
-            now = time.time()
-            expire = now + max(ttl.total_seconds(), 1.0)
-        self.core.set(key_str, int(expire * 1e9) if expire is not None else 0)
+            seconds = ttl.total_seconds()
+            if seconds == 0:
+                raise Exception("ttl must be positive")
+            ttl_ns = int(seconds * 1e9)
+        self.core.set(key_str, ttl_ns or 0)
 
     def set(
         self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
@@ -339,13 +330,14 @@ class Cache:
         else:
             key_str = self.key_gen(key)
 
-        expire = None
+        ttl_ns = None
         if ttl is not None:
-            now = time.time()
-            expire = now + max(ttl.total_seconds(), 1.0)
-        index, evicted_index, evicted_key = self.core.set(
-            key_str, int(expire * 1e9) if expire is not None else 0
-        )
+            seconds = ttl.total_seconds()
+            if seconds <= 0:
+                raise InvalidTTL("ttl must be positive")
+            ttl_ns = int(seconds * 1e9)
+        # 0 means no ttl
+        index, evicted_index, evicted_key = self.core.set(key_str, ttl_ns or 0)
         self._cache[index] = value
         if evicted_index is not None:
             self._cache[evicted_index] = sentinel
@@ -374,12 +366,15 @@ class Cache:
         else:
             key_str = self.key_gen(key)
 
-        expire = None
+        ttl_ns = None
         if ttl is not None:
-            now = time.time()
-            expire = now + max(ttl.total_seconds(), 1.0)
+            # min res 1 second
+            seconds = ttl.total_seconds()
+            if seconds <= 0:
+                raise InvalidTTL("ttl must be positive")
+            ttl_ns = int(seconds * 1e9)
         index, test_index, evicted_index, evicted_key = self.core.set(
-            key_str, int(expire * 1e9) if expire is not None else 0
+            key_str, ttl_ns or 0
         )
         self._cache[index] = value
         if test_index is not None:
@@ -417,9 +412,7 @@ class Cache:
         Remove expired keys.
         """
         while True:
-            self.core.advance(
-                time.time_ns(), self._cache, sentinel, self.key_gen.kh, self.key_gen.hk
-            )
+            self.core.advance(self._cache, sentinel, self.key_gen.kh, self.key_gen.hk)
             time.sleep(0.5)
 
     def clear(self):

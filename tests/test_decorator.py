@@ -8,8 +8,8 @@ from typing import Any, Dict, List
 from unittest.mock import Mock
 
 import pytest
-
 from bounded_zipf import Zipf
+
 from theine import Cache, Memoize
 
 

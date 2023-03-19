@@ -164,7 +164,7 @@ CACHES = {
     "default": {
         "BACKEND": "theine.adapters.django.Cache",
         "TIMEOUT": 300,
-        "OPTIONS": {"MAX_ENTRIES": 10000},
+        "OPTIONS": {"MAX_ENTRIES": 10000, "POLICY": "tlfu"},
     },
 }
 ```

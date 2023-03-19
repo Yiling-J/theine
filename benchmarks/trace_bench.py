@@ -1,14 +1,14 @@
 import csv
-from time import sleep
-import matplotlib.pyplot as plt
 from datetime import timedelta
 from functools import lru_cache
 from random import randint
+from time import sleep
 from typing import Callable, Iterable
 from unittest.mock import Mock
 
-from cachetools import LFUCache, cached
+import matplotlib.pyplot as plt
 from bounded_zipf import Zipf
+from cachetools import LFUCache, cached
 
 from theine import Cache, Memoize
 

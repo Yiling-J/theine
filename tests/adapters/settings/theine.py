@@ -3,7 +3,7 @@ CACHES = {
     "default": {
         "BACKEND": "theine.adapters.django.Cache",
         "TIMEOUT": 60,
-        "OPTIONS": {"MAX_ENTRIES": 1000},
+        "OPTIONS": {"MAX_ENTRIES": 1000, "POLICY": "tlfu"},
     },
 }
 

@@ -3,11 +3,11 @@ import functools
 import uuid
 from typing import List
 
-import pytest
 import cacheout
-from cachetools import LFUCache, cached, LRUCache
-
+import pytest
 from bounded_zipf import Zipf
+from cachetools import LFUCache, LRUCache, cached
+
 from theine.thenie import Cache, Memoize
 
 REQUESTS = 10000

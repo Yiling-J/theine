@@ -1,7 +1,6 @@
-import time
 from datetime import timedelta
 from threading import Lock
-from typing import DefaultDict, Optional, cast
+from typing import Optional, cast
 
 from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
 
@@ -12,7 +11,9 @@ from theine.thenie import sentinel
 class Cache(BaseCache):
     def __init__(self, name, params):
         super().__init__(params)
-        self.cache = Theine("tlfu", self._max_entries)
+        options = params.get("OPTIONS", {})
+        policy = options.get("POLICY", "tlfu")
+        self.cache = Theine(policy, self._max_entries)
 
     def _timeout_seconds(self, timeout) -> Optional[float]:
         if timeout == DEFAULT_TIMEOUT:

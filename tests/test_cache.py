@@ -1,7 +1,8 @@
-import pytest
 from datetime import timedelta
 from random import randint
 from time import sleep
+
+import pytest
 
 from theine.thenie import Cache, sentinel
 
@@ -46,7 +47,7 @@ def test_set_with_ttl(policy):
     cache = Cache(policy, 500)
     for i in range(30):
         key = f"key:{i}"
-        cache.set(key, key, timedelta(seconds=i))
+        cache.set(key, key, timedelta(seconds=i + 1))
         key = f"key:{i}:2"
         cache.set(key, key, timedelta(seconds=i + 100))
     assert len(cache) == 60
@@ -100,7 +101,7 @@ def test_set_with_ttl_hashable(policy):
     cache = Cache(policy, 500)
     foos = [Foo(i) for i in range(30)]
     for i in range(30):
-        cache.set(foos[i], foos[i], timedelta(seconds=i))
+        cache.set(foos[i], foos[i], timedelta(seconds=i + 1))
     assert len(cache) == 30
     assert cache.key_gen.len() == 30
     current = 30
