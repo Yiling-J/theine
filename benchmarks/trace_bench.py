@@ -1,27 +1,27 @@
 import csv
 from datetime import timedelta
-from functools import lru_cache
 from random import randint
-from time import sleep
-from typing import Callable, Iterable
-from unittest.mock import Mock
+from typing import Callable, Iterator
 
 import matplotlib.pyplot as plt
 from bounded_zipf import Zipf
-from cachetools import LFUCache, cached
+from theine import Cache
 
-from theine import Cache, Memoize
 
 plt.style.use("ggplot")
 
 
-def zipf_key_gen() -> Iterable:
-    z = Zipf(1.001, 10, 1000000)
+GET = "GET"
+SET = "SET"
+
+
+def zipf_key_gen() -> Iterator:
+    z = Zipf(1.001, 10, 50000000)
     for _ in range(1000000):
-        yield f"{z.get()}"
+        yield f"{z.get()}", GET
 
 
-def ucb_key_gen() -> Iterable:
+def ucb_key_gen() -> Iterator:
     with open(f"benchmarks/trace/ucb", "rb") as f:
         for line in f:
             vb = line.split(b" ")[-2]
@@ -29,101 +29,91 @@ def ucb_key_gen() -> Iterable:
                 v = vb.decode()
             except:
                 v = "failed"
-            yield v
+            yield v, GET
 
 
-def ds1_key_gen() -> Iterable:
+def ds1_key_gen() -> Iterator:
     with open(f"benchmarks/trace/ds1", "r") as f:
         for line in f:
-            yield line.split(",")[0]
+            yield line.split(",")[0], GET
 
 
-def s3_key_gen() -> Iterable:
+def s3_key_gen() -> Iterator:
     with open(f"benchmarks/trace/s3", "r") as f:
         for line in f:
-            yield line.split(",")[0]
+            yield line.split(",")[0], GET
 
 
-def scarab_key_gen() -> Iterable:
+def scarab_key_gen() -> Iterator:
     with open("benchmarks/trace/sc.trace", "rb") as f:
         while True:
             raw = f.read(8)
             if not raw:
                 break
-            yield str(int.from_bytes(raw, "big"))
+            yield str(int.from_bytes(raw, "big")), GET
 
 
-def fb_key_gen() -> Iterable:
+def scarab_1h_key_gen() -> Iterator:
+    with open("benchmarks/trace/sc2", "rb") as f:
+        while True:
+            raw = f.read(8)
+            if not raw:
+                break
+            yield str(int.from_bytes(raw, "big")), GET
+
+
+def fb_key_gen() -> Iterator:
     with open("benchmarks/trace/fb.csv", "r", newline="") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            if row["op"] != "GET":
-                continue
-            yield str(row["key"])
+            yield str(row["key"]), row["op"]
 
 
-def bench_theine(policy: str, cap: int, gen: Callable[..., Iterable]):
+def fb2_key_gen() -> Iterator:
+    with open("benchmarks/trace/fb2.csv", "r", newline="") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            yield str(row["key"]), row["op"]
+
+
+def fb3_key_gen() -> Iterator:
+    with open("benchmarks/trace/fb3.csv", "r", newline="") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            yield str(row["key"]), row["op"]
+
+
+def ytb_key_gen() -> Iterator:
+    with open("benchmarks/trace/ytb.dat", "r", newline="") as f:
+        for line in f:
+            tmp = line.split(" ")
+            vid = tmp[4].split("&")[0]
+            yield vid, GET
+
+
+def bench_theine(policy: str, cap: int, gen: Callable[..., Iterator]):
     counter = 0
-    load = 0
+    miss = 0
 
-    @Memoize(Cache(policy, cap), timeout=None)
-    def theine_hit(i: str):
-        nonlocal load
-        load += 1
-        return i
+    cache = Cache(policy, cap)
 
-    @theine_hit.key
-    def _(i: str) -> str:
-        return i
-
-    for key in gen():
+    for key, op in gen():
         counter += 1
-        v = theine_hit(key)
-        assert key == v
+        if op == GET:
+            v = cache.get(key)
+            if v is not None:
+                assert key == v
+            else:
+                miss += 1
+                cache.set(key, key)
+        else:
+            cache.set(key, key)
+
         if counter % 100000 == 0:
             print(".", end="", flush=True)
     print("")
-    hr = (counter - load) / counter
+    hr = (counter - miss) / counter
     print(f"---- theine({policy}) hit ratio: {hr:.3f}")
-    return hr
-
-
-def bench_lru(cap: int, gen: Callable[..., Iterable]):
-    counter = 0
-    load = 0
-
-    @lru_cache(maxsize=cap)
-    def lru_hit(i: str):
-        nonlocal load
-        load += 1
-        return i
-
-    for key in gen():
-        counter += 1
-        v = lru_hit(key)
-        assert key == v
-        if counter % 100000 == 0:
-            print(".", end="", flush=True)
-    print("")
-    hr = (counter - load) / counter
-    print(f"---- lru hit ratio: {hr:.3f}")
-    return hr
-
-
-def bench_cachetools_lfu(cap: int, gen: Callable[..., Iterable]):
-    @cached(cache=LFUCache(maxsize=cap))
-    def lru_hit(i: str, m: Mock):
-        m(i)
-        return i
-
-    mock = Mock()
-    counter = 0
-    for key in gen():
-        v = lru_hit(key, mock)
-        assert key == v
-        counter += 1
-    hr = 1 - mock.call_count / counter
-    print(f"cachetools lfu hit ratio: {hr:.2f}")
     return hr
 
 
@@ -190,6 +180,7 @@ bench_and_plot(
 bench_and_plot(
     [1000, 2000, 5000, 10000, 20000, 50000, 100000], scarab_key_gen, "SCARAB"
 )
-bench_and_plot(
-    [50000, 100000, 200000, 300000, 500000, 800000, 1000000], fb_key_gen, "FB"
-)
+
+bench_and_plot([25000, 50000, 75000, 100000], scarab_1h_key_gen, "SCARAB1H")
+
+# bench_and_plot([10000, 20000, 50000, 80000, 100000], fb_key_gen, "FB")
