@@ -219,7 +219,11 @@ This trace is described as "disk read accesses initiated by a large commercial s
 
 This trace is described as "a database server running at a commercial site running an ERP application on top of a commercial database."
 ![hit ratios](benchmarks/ds1.png)
-**UC Berkeley web traces**
+**Scarabresearch database trace**
 
-This trace consists of 2 days' worth of HTTP traces gathered from the Home IP service offered by UC Berkeley to its students.
-![hit ratios](benchmarks/ucb.png)
+Scarabresearch 1 hour database trace from this [issue](https://github.com/ben-manes/caffeine/issues/106)
+![hit ratios](benchmarks/scarab1h.png)
+**Meta anonymized trace**
+
+Meta shared anonymized trace captured from large scale production cache services, from [cachelib](https://cachelib.org/docs/Cache_Library_User_Guides/Cachebench_FB_HW_eval/#running-cachebench-with-the-trace-workload)
+![hit ratios](benchmarks/fb.png)
