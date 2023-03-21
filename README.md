@@ -204,7 +204,7 @@ Write and Mix Zipf use 1k max cache size, so you can see the high cost of tradit
 
 ### hit ratios
 
-All hit ratio benchmarks use small datasets and finish in seconds/minutes, better to try Theine yourself and focus on whether the cache exceeds your performance needs and has the desired capabilities. You may also notice that in ucb bench, LRU has a higher hit ratio. Take a look this: [cache performing worse than LRU](https://github.com/ben-manes/caffeine/issues/106) if you are interested.
+All hit ratio benchmarks use small datasets and finish in seconds/minutes, better to try Theine yourself and focus on whether the cache exceeds your performance needs and has the desired capabilities.
 
 Source Code: https://github.com/Yiling-J/theine/blob/main/benchmarks/trace_bench.py
 
