@@ -46,7 +46,7 @@ Discards the least recently used items first.
 
 An approximate LFU policy in order to boost the effectiveness of caches subject to skewed access distributions.
 
-Theine uses an adaptive verison of W-TinyLFU to get better hit ratio under different types of workloads.
+Theine uses an adaptive version of W-TinyLFU to get better hit ratio under different types of workloads.
 
 Reference:
 
