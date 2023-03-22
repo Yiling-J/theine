@@ -46,6 +46,8 @@ Discards the least recently used items first.
 
 An approximate LFU policy in order to boost the effectiveness of caches subject to skewed access distributions.
 
+Theine uses an adaptive verison of W-TinyLFU to get better hit ratio under different types of workloads.
+
 Reference:
 
 https://arxiv.org/pdf/1512.00727.pdf
@@ -53,7 +55,7 @@ https://arxiv.org/pdf/1512.00727.pdf
 
 #### Clock-PRO
 
-An improved CLOCK replacement policy(CLOCK: an approximation of LRU).
+An improved CLOCK replacement policy(CLOCK: an approximation of LRU), based on [PyClockPro](https://bitbucket.org/SamiLehtinen/pyclockpro/src/master/).
 
 Reference:
 
