@@ -35,13 +35,21 @@ def ucb_key_gen() -> Iterator:
 def ds1_key_gen() -> Iterator:
     with open(f"benchmarks/trace/ds1", "r") as f:
         for line in f:
-            yield line.split(",")[0], GET
+            tmp = line.split(" ")
+            base = int(tmp[0])
+            count = int(tmp[1])
+            for i in range(count):
+                yield str(base + i), GET
 
 
 def s3_key_gen() -> Iterator:
     with open(f"benchmarks/trace/s3", "r") as f:
         for line in f:
-            yield line.split(",")[0], GET
+            tmp = line.split(" ")
+            base = int(tmp[0])
+            count = int(tmp[1])
+            for i in range(count):
+                yield str(base + i), GET
 
 
 def scarab_key_gen() -> Iterator:
@@ -172,7 +180,7 @@ bench_and_plot(
     [50000, 100000, 200000, 300000, 500000, 800000, 1000000], ucb_key_gen, "UCB"
 )
 bench_and_plot(
-    [50000, 100000, 200000, 300000, 500000, 800000, 1000000], ds1_key_gen, "DS1"
+    [1000000, 2000000, 3000000, 5000000, 6000000, 8000000], ds1_key_gen, "DS1"
 )
 bench_and_plot(
     [50000, 100000, 200000, 300000, 500000, 800000, 1000000], s3_key_gen, "S3"
@@ -183,4 +191,4 @@ bench_and_plot(
 
 bench_and_plot([25000, 50000, 75000, 100000], scarab_1h_key_gen, "SCARAB1H")
 
-# bench_and_plot([10000, 20000, 50000, 80000, 100000], fb_key_gen, "FB")
+bench_and_plot([10000, 20000, 50000, 80000, 100000], fb_key_gen, "FB")
