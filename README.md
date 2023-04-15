@@ -232,4 +232,4 @@ Meta shared anonymized trace captured from large scale production cache services
 ![hit ratios](benchmarks/fb.png)
 
 ## Support
-Open an issue, ask question in discussions or join discoard channel: https://discord.gg/StrgfPaQqE 
+Open an issue, ask question in discussions or join discord channel: https://discord.gg/StrgfPaQqE 
