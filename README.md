@@ -25,6 +25,7 @@ cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
   * [continuous benchmark](#continuous-benchmark)
   * [10k requests](#10k-requests)
   * [hit ratios](#hit-ratios)
+- [Support](#support)
 
 ## Requirements
 Python 3.7+
@@ -229,3 +230,6 @@ Scarabresearch 1 hour database trace from this [issue](https://github.com/ben-ma
 
 Meta shared anonymized trace captured from large scale production cache services, from [cachelib](https://cachelib.org/docs/Cache_Library_User_Guides/Cachebench_FB_HW_eval/#running-cachebench-with-the-trace-workload)
 ![hit ratios](benchmarks/fb.png)
+
+## Support
+Open an issue, ask question in discussions or join discoard channel: https://discord.gg/StrgfPaQqE 
