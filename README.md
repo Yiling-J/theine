@@ -233,3 +233,5 @@ Meta shared anonymized trace captured from large scale production cache services
 
 ## Support
 Open an issue, ask question in discussions or join discord channel: https://discord.gg/StrgfPaQqE 
+
+Theine Go version is also available, which focus on concurrency performance, take a look if you are interested: [Theine Go](https://github.com/Yiling-J/theine-go).
