@@ -250,7 +250,7 @@ class Cache:
     """
     Create new Theine cache store and use API with this class. This class is not thread-safe.
 
-    :param policy: eviction policy, "tlfu" and "lru" are the only two supported now.
+    :param policy: eviction policy, "tlfu", "lru" and "clockpro" are the only supported now.
     :param size: cache size.
     """
 
