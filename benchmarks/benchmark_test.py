@@ -8,7 +8,7 @@ import pytest
 from bounded_zipf import Zipf
 from cachetools import LFUCache, LRUCache, cached
 
-from theine.thenie import Cache, Memoize
+from theine.theine import Cache, Memoize
 
 REQUESTS = 10000
 

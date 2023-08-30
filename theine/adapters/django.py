@@ -5,7 +5,7 @@ from typing import Optional, cast
 from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
 
 from theine import Cache as Theine
-from theine.thenie import sentinel
+from theine.theine import sentinel
 
 
 class Cache(BaseCache):

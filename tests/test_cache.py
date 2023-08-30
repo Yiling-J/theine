@@ -4,7 +4,7 @@ from time import sleep
 
 import pytest
 
-from theine.thenie import Cache, sentinel
+from theine.theine import Cache, sentinel
 
 
 @pytest.fixture(params=["lru", "tlfu", "clockpro"])
