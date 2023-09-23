@@ -67,6 +67,8 @@ https://static.usenix.org/event/usenix05/tech/general/full_papers/jiang/jiang_ht
 
 Key should be a **Hashable** object, and value can be any **Python object**. If key type is not **str/int**, Theine will generate a unique key string automatically, this unique str will use extra space in memory and increase get/set/remove overhead.
 
+Each Cache instance will span a thread to evict expired entries proactively, and the overhead of cache instance init is relatively high. So **don't create instance dynamically in your function**. Django adapter will create a global cache instance autmoatically, and when using the `Memoize` decorator, please make sure your cache instance is created globally, instead of creating a new one in each run.
+
 Please be aware the Cache class is **not** thread-safe.
 
 ```Python
