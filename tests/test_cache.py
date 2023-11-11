@@ -129,3 +129,11 @@ def test_ttl_high_workload(policy):
             break
     assert len(cache.key_gen.kh) == 0
     assert len(cache.key_gen.hk) == 0
+
+
+def test_close_cache(policy):
+    for _ in range(10):
+        cache = Cache(policy, 500)
+        cache.set("foo", "bar", timedelta(seconds=60))
+        cache.close()
+        assert cache._maintainer.is_alive() is False

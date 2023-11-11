@@ -6,8 +6,19 @@ from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
 from threading import Event, Thread
-from typing import (Any, Callable, Dict, Hashable, List, Optional, Tuple, Type,
-                    TypeVar, Union, cast)
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from theine_core import ClockProCore, LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol
@@ -263,6 +274,7 @@ class Cache:
             self._cache = [sentinel] * (2 * size + 500)
             setattr(self, "set", self._set_clockpro)
         self.key_gen = KeyGen()
+        self._closed = False
         self._maintainer = Thread(target=self.maintenance, daemon=True)
         self._maintainer.start()
 
@@ -411,10 +423,18 @@ class Cache:
         """
         Remove expired keys.
         """
-        while True:
+        while not self._closed:
             self.core.advance(self._cache, sentinel, self.key_gen.kh, self.key_gen.hk)
             time.sleep(0.5)
 
     def clear(self):
         self.core.clear()
         self._cache = [sentinel] * len(self._cache)
+
+    def close(self):
+        self._closed = True
+        self._maintainer.join()
+
+    def __del__(self):
+        self.clear()
+        self.close()
