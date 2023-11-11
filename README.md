@@ -89,6 +89,12 @@ cache.set("key", {"foo": "bar"}, timedelta(seconds=100))
 
 # delete from cache
 cache.delete("key")
+
+# close cache, stop timing wheel thread
+cache.close()
+
+# clear cache
+cache.clear()
 ```
 
 ## Decorator
