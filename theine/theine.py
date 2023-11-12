@@ -24,6 +24,7 @@ from theine_core import ClockProCore, LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol
 
 from theine.exceptions import InvalidTTL
+from theine.models import CacheStats
 
 sentinel = object()
 
@@ -277,6 +278,9 @@ class Cache:
         self._closed = False
         self._maintainer = Thread(target=self.maintenance, daemon=True)
         self._maintainer.start()
+        self._total = 0
+        self._hit = 0
+        self.max_size = size
 
     def __len__(self) -> int:
         return self.core.len()
@@ -288,6 +292,7 @@ class Cache:
         :param key: key hashable, use str/int for best performance.
         :param default: returned value if key is not found in cache, default None.
         """
+        self._total += 1
         auto_key = False
         key_str = ""
         if isinstance(key, str):
@@ -304,6 +309,7 @@ class Cache:
                 self.key_gen.remove(key_str)
             return default
 
+        self._hit += 1
         return self._cache[index]
 
     def _access(self, key: Hashable, ttl: Optional[timedelta] = None):
@@ -438,3 +444,6 @@ class Cache:
     def __del__(self):
         self.clear()
         self.close()
+
+    def stats(self) -> CacheStats:
+        return CacheStats(self._total, self._hit)

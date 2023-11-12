@@ -95,6 +95,17 @@ cache.close()
 
 # clear cache
 cache.clear()
+
+# get current cache stats, please call stats() again if you need updated stats
+stats = cache.stats()
+print(stats.request_count, stats.hit_count, stats.hit_rate)
+
+# get cache max size
+cache.max_size
+
+# get cache current size
+len(cache)
+
 ```
 
 ## Decorator
@@ -240,6 +251,6 @@ Meta shared anonymized trace captured from large scale production cache services
 ![hit ratios](benchmarks/fb.png)
 
 ## Support
-Open an issue, ask question in discussions or join discord channel: https://discord.gg/StrgfPaQqE 
+Open an issue, ask question in discussions or join discord channel: https://discord.gg/StrgfPaQqE
 
 Theine Go version is also available, which focus on concurrency performance, take a look if you are interested: [Theine Go](https://github.com/Yiling-J/theine-go).

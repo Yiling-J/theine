@@ -1,6 +1,7 @@
 from datetime import timedelta
 from random import randint
 from time import sleep
+from bounded_zipf import Zipf
 
 import pytest
 
@@ -137,3 +138,23 @@ def test_close_cache(policy):
         cache.set("foo", "bar", timedelta(seconds=60))
         cache.close()
         assert cache._maintainer.is_alive() is False
+
+
+def test_cache_stats(policy):
+    cache = Cache(policy, 5000)
+    assert cache.max_size == 5000
+    assert len(cache) == 0
+    z = Zipf(1.0001, 10, 20000)
+    for _ in range(20000):
+        i = z.get()
+        key = f"key:{i}"
+        v = cache.get(key)
+        if v is None:
+            cache.set(key, key)
+    stats = cache.stats()
+    assert stats.hit_count > 0
+    assert stats.miss_count > 0
+    assert stats.request_count == stats.hit_count + stats.miss_count
+    assert stats.hit_rate > 0.5
+    assert stats.hit_rate < 1
+    assert stats.hit_rate == stats.hit_count / stats.request_count
