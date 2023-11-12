@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.4.1]
+### Added
+- Add close/stats API
+
 ## [0.4.0]
 ### Added
 - Add policy option to Django settings
