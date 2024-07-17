@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.4.2]
+- Fix mypy no-implicit-reexport
+
 ## [0.4.1]
 ### Added
 - Add close/stats API
