@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.4.3]
+- Add license to pyproject.toml
+
 ## [0.4.2]
 - Fix mypy no-implicit-reexport
 
