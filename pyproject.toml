@@ -12,7 +12,7 @@ classifiers = [
 license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = ">=3.8,<4.0"
 typing-extensions = "^4.4.0"
 theine-core = "^0.4.3"
 
@@ -30,6 +30,16 @@ isort = "^5.5.0"
 py-spy = "^0.3.14"
 cacheout = "^0.14.1"
 bounded-zipf = "^1.0.0"
+django-stubs = "^5.0.2"
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main", ]
+strict = true
+warn_no_return = false
+
+[tool.django-stubs]
+django_settings_module = 'theine'
+strict_settings = false
 
 [build-system]
 requires = ["poetry-core"]
