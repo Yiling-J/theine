@@ -35,7 +35,6 @@ django-stubs = "^5.0.2"
 [tool.mypy]
 plugins = ["mypy_django_plugin.main", ]
 strict = true
-warn_no_return = false
 
 [tool.django-stubs]
 django_settings_module = 'theine'

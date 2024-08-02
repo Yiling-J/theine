@@ -8,7 +8,7 @@ from functools import _make_key, update_wrapper
 from threading import Event, Thread
 from typing import (
     Any,
-    Callable,
+    Awaitable, Callable,
     Dict,
     Hashable,
     List,
@@ -29,32 +29,27 @@ from theine.models import CacheStats
 sentinel = object()
 
 
-def KeyGen():
-    counter = itertools.count()
-    hk_map: Dict[Hashable, int] = {}
-    kh_map: Dict[int, Hashable] = {}
+class KeyGen:
+    def __init__(self) -> None:
+        self.counter = itertools.count()
+        self.hk: Dict[Hashable, int] = {}
+        self.kh: Dict[int, Hashable] = {}
 
-    def gen(input: Hashable) -> str:
-        id = hk_map.get(input, None)
+    def gen(self, input: Hashable) -> str:
+        id = self.hk.get(input, None)
         if id is None:
-            id = next(counter)
-            hk_map[input] = id
-            kh_map[id] = input
+            id = next(self.counter)
+            self.hk[input] = id
+            self.kh[id] = input
         return f"_auto:{id}"
 
-    def _remove(key: str):
-        h = kh_map.pop(int(key.replace("_auto:", "")), None)
+    def remove(self, key: str) -> None:
+        h = self.kh.pop(int(key.replace("_auto:", "")), None)
         if h is not None:
-            hk_map.pop(h, None)
+            self.hk.pop(h, None)
 
-    def _len() -> int:
-        return len(hk_map)
-
-    gen.remove = _remove  # type: ignore
-    gen.len = _len  # type: ignore
-    gen.kh = kh_map  # type: ignore
-    gen.hk = hk_map  # type: ignore
-    return gen
+    def len(self) -> int:
+        return len(self.hk)
 
 
 class Core(Protocol):
@@ -70,10 +65,10 @@ class Core(Protocol):
     def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, cache: List, sentinel: Any, kh: Dict, hk: Dict):
+    def advance(self, cache: list[Any], sentinel: Any, kh: dict[int, Hashable], hk: dict[Hashable, int]) -> None:
         ...
 
-    def clear(self):
+    def clear(self) -> None:
         ...
 
     def len(self) -> int:
@@ -95,10 +90,10 @@ class ClockProCoreP(Protocol):
     def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, cache: List, sentinel: Any, kh: Dict, hk: Dict):
+    def advance(self, cache: list[Any], sentinel: Any, kh: dict[int, Hashable], hk: dict[Hashable, int]) -> None:
         ...
 
-    def clear(self):
+    def clear(self) -> None:
         ...
 
     def len(self) -> int:
@@ -112,7 +107,8 @@ CORES: Dict[str, Union[Type[Core], Type[ClockProCoreP]]] = {
 }
 
 P = ParamSpec("P")
-R = TypeVar("R", covariant=True)
+R = TypeVar("R", covariant=True, bound=Any)
+R_A = TypeVar("R_A", covariant=True, bound=Awaitable[Any] | Callable[..., Any])
 
 
 @dataclass
@@ -124,12 +120,12 @@ class EventData:
 # https://github.com/python/cpython/issues/90780
 # use event to protect from thundering herd
 class CachedAwaitable:
-    def __init__(self, awaitable):
+    def __init__(self, awaitable: Awaitable[Any]) -> None:
         self.awaitable = awaitable
-        self.future = None
+        self.future: Optional[Awaitable[Any]] = None
         self.result = sentinel
 
-    def __await__(self):
+    def __await__(self) -> Any:
         if self.result is not sentinel:
             return self.result
 
@@ -146,33 +142,32 @@ class CachedAwaitable:
 
 
 class Key:
-    def __init__(self):
+    def __init__(self) -> None:
         self.key: Optional[str] = None
         self.event = Event()
 
 
-class Cached(Protocol[P, R]):
+class Cached(Protocol[P, R_A]):
     _cache: "Cache"
 
-    def key(self, fn: Callable[P, Hashable]):
+    def key(self, fn: Callable[P, Hashable]) -> None:
         ...
 
-    def __call__(self, *args, **kwargs) -> R:
+    def __call__(self, *args: Any, **kwargs: Any) -> R_A:
         ...
 
 
 def Wrapper(
-    fn: Callable[P, R],
+    fn: Callable[P, R_A],
     timeout: Optional[timedelta],
     cache: "Cache",
     coro: bool,
     typed: bool,
     lock: bool,
-) -> Cached[P, R]:
-
+) -> Cached[P, R_A]:
     _key_func: Optional[Callable[..., Hashable]] = None
     _events: Dict[Hashable, EventData] = {}
-    _func: Callable = fn
+    _func: Callable[P, R_A] = fn
     _cache: "Cache" = cache
     _coro: bool = coro
     _timeout: Optional[timedelta] = timeout
@@ -180,13 +175,13 @@ def Wrapper(
     _auto_key: bool = True
     _lock = lock
 
-    def key(fn: Callable[P, Hashable]):
+    def key(fn: Callable[P, Hashable]) -> None:
         nonlocal _key_func
         nonlocal _auto_key
         _key_func = fn
         _auto_key = False
 
-    def fetch(*args: P.args, **kwargs: P.kwargs) -> R:
+    def fetch(*args: P.args, **kwargs: P.kwargs) -> R_A:
         if _auto_key:
             key = _make_key(args, kwargs, _typed)
         else:
@@ -197,11 +192,11 @@ def Wrapper(
             if result is sentinel:
                 result = CachedAwaitable(_func(*args, **kwargs))
                 _cache.set(key, result, _timeout)
-            return cast(R, result)
+            return cast(R_A, result)
 
         data = _cache.get(key, sentinel)
         if data is not sentinel:
-            return cast(R, data)
+            return cast(R_A, data)
         if _lock:
             event = EventData(Event(), None)
             ve = _events.setdefault(key, event)
@@ -217,7 +212,7 @@ def Wrapper(
         else:
             result = _func(*args, **kwargs)
             _cache.set(key, result, _timeout)
-        return cast(R, result)
+        return cast(R_A, result)
 
     fetch._cache = _cache  # type: ignore
     fetch.key = key  # type: ignore
@@ -252,7 +247,7 @@ class Memoize:
         self.typed = typed
         self.lock = lock
 
-    def __call__(self, fn: Callable[P, R]) -> Cached[P, R]:
+    def __call__(self, fn: Callable[P, R_A]) -> Cached[P, R_A]:
         coro = inspect.iscoroutinefunction(fn)
         wrapper = Wrapper(fn, self.timeout, self.cache, coro, self.typed, self.lock)
         return update_wrapper(wrapper, fn)
@@ -300,7 +295,7 @@ class Cache:
         elif isinstance(key, int):
             key_str = f"{key}"
         else:
-            key_str = self.key_gen(key)
+            key_str = self.key_gen.gen(key)
             auto_key = True
 
         index = self.core.access(key_str)
@@ -312,14 +307,14 @@ class Cache:
         self._hit += 1
         return self._cache[index]
 
-    def _access(self, key: Hashable, ttl: Optional[timedelta] = None):
+    def _access(self, key: Hashable, ttl: Optional[timedelta] = None) -> None:
         key_str = ""
         if isinstance(key, str):
             key_str = key
         elif isinstance(key, int):
             key_str = f"{key}"
         else:
-            key_str = self.key_gen(key)
+            key_str = self.key_gen.gen(key)
 
         ttl_ns = None
         if ttl is not None:
@@ -346,7 +341,7 @@ class Cache:
         elif isinstance(key, int):
             key_str = f"{key}"
         else:
-            key_str = self.key_gen(key)
+            key_str = self.key_gen.gen(key)
 
         ttl_ns = None
         if ttl is not None:
@@ -382,7 +377,7 @@ class Cache:
         elif isinstance(key, int):
             key_str = f"{key}"
         else:
-            key_str = self.key_gen(key)
+            key_str = self.key_gen.gen(key)
 
         ttl_ns = None
         if ttl is not None:
@@ -416,7 +411,7 @@ class Cache:
         elif isinstance(key, int):
             key_str = f"{key}"
         else:
-            key_str = self.key_gen(key)
+            key_str = self.key_gen.gen(key)
             self.key_gen.remove(key_str)
 
         index = self.core.remove(key_str)
@@ -425,7 +420,7 @@ class Cache:
             return True
         return False
 
-    def maintenance(self):
+    def maintenance(self) -> None:
         """
         Remove expired keys.
         """
@@ -433,15 +428,15 @@ class Cache:
             self.core.advance(self._cache, sentinel, self.key_gen.kh, self.key_gen.hk)
             time.sleep(0.5)
 
-    def clear(self):
+    def clear(self) -> None:
         self.core.clear()
         self._cache = [sentinel] * len(self._cache)
 
-    def close(self):
+    def close(self) -> None:
         self._closed = True
         self._maintainer.join()
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.clear()
         self.close()
 

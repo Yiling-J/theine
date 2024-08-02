@@ -1,8 +1,8 @@
 from datetime import timedelta
 from threading import Lock
-from typing import Any, Callable, Optional, Union, cast, Mapping
+from typing import Any, Callable, Optional, Union
 
-from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
+from django.core.cache.backends.base import BaseCache, DEFAULT_TIMEOUT
 
 from theine import Cache as Theine
 from theine.theine import sentinel

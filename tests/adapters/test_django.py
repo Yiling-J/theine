@@ -16,23 +16,23 @@ def cache() -> Iterable[BaseCache]:
 
 
 class TestTheineCache:
-    def test_settings(self, cache: BaseCache):
+    def test_settings(self, cache: BaseCache) -> None:
         assert cache._max_entries == 1000
         assert cache.default_timeout == 60
 
-    def test_unicode_keys(self, cache: BaseCache):
+    def test_unicode_keys(self, cache: BaseCache) -> None:
         cache.set("ключ", "value")
         res = cache.get("ключ")
         assert res == "value"
 
-    def test_save_and_integer(self, cache: BaseCache):
+    def test_save_and_integer(self, cache: BaseCache) -> None:
         cache.set("test_key", 2)
         res = cache.get("test_key", "Foo")
 
         assert isinstance(res, int)
         assert res == 2
 
-    def test_save_string(self, cache: BaseCache):
+    def test_save_string(self, cache: BaseCache) -> None:
         cache.set("test_key", "hello" * 1000)
         res = cache.get("test_key")
 
@@ -45,14 +45,14 @@ class TestTheineCache:
         assert isinstance(res, str)
         assert res == "2"
 
-    def test_save_unicode(self, cache: BaseCache):
+    def test_save_unicode(self, cache: BaseCache) -> None:
         cache.set("test_key", "heló")
         res = cache.get("test_key")
 
         assert isinstance(res, str)
         assert res == "heló"
 
-    def test_save_dict(self, cache: BaseCache):
+    def test_save_dict(self, cache: BaseCache) -> None:
         now_dt = datetime.datetime.now()
         test_dict = {"id": 1, "date": now_dt, "name": "Foo"}
 
@@ -64,7 +64,7 @@ class TestTheineCache:
         assert res["name"] == "Foo"
         assert res["date"] == now_dt
 
-    def test_save_float(self, cache: BaseCache):
+    def test_save_float(self, cache: BaseCache) -> None:
         float_val = 1.345620002
 
         cache.set("test_key", float_val)
@@ -73,19 +73,19 @@ class TestTheineCache:
         assert isinstance(res, float)
         assert res == float_val
 
-    def test_timeout(self, cache: BaseCache):
+    def test_timeout(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=3)
         time.sleep(4)
 
         res = cache.get("test_key")
         assert res is None
 
-    def test_timeout_0(self, cache: BaseCache):
+    def test_timeout_0(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=0)
         res = cache.get("test_key")
         assert res is None
 
-    def test_timeout_parameter_as_positional_argument(self, cache: BaseCache):
+    def test_timeout_parameter_as_positional_argument(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, -1)
         res = cache.get("test_key")
         assert res is None
@@ -97,7 +97,7 @@ class TestTheineCache:
         assert res1 == 222
         assert res2 is None
 
-    def test_timeout_negative(self, cache: BaseCache):
+    def test_timeout_negative(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=-1)
         res = cache.get("test_key")
         assert res is None
@@ -107,22 +107,19 @@ class TestTheineCache:
         res = cache.get("test_key")
         assert res is None
 
-    def test_timeout_tiny(self, cache: BaseCache):
+    def test_timeout_tiny(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=0.00001)
         res = cache.get("test_key")
         assert res in (None, 222)
 
-    def test_set_add(self, cache: BaseCache):
+    def test_set_add(self, cache: BaseCache) -> None:
         cache.set("add_key", "Initial value")
-        res = cache.add("add_key", "New value")
-        assert res is False
+        assert cache.add("add_key", "New value") is False
 
-        res = cache.get("add_key")
-        assert res == "Initial value"
-        res = cache.add("other_key", "New value")
-        assert res is True
+        assert cache.get("add_key") == "Initial value"
+        assert cache.add("other_key", "New value") is True
 
-    def test_get_many(self, cache: BaseCache):
+    def test_get_many(self, cache: BaseCache) -> None:
         cache.set("a", 1)
         cache.set("b", 2)
         cache.set("c", 3)
@@ -130,7 +127,7 @@ class TestTheineCache:
         res = cache.get_many(["a", "b", "c"])
         assert res == {"a": 1, "b": 2, "c": 3}
 
-    def test_get_many_unicode(self, cache: BaseCache):
+    def test_get_many_unicode(self, cache: BaseCache) -> None:
         cache.set("a", "1")
         cache.set("b", "2")
         cache.set("c", "3")
@@ -138,40 +135,32 @@ class TestTheineCache:
         res = cache.get_many(["a", "b", "c"])
         assert res == {"a": "1", "b": "2", "c": "3"}
 
-    def test_set_many(self, cache: BaseCache):
+    def test_set_many(self, cache: BaseCache) -> None:
         cache.set_many({"a": 1, "b": 2, "c": 3})
         res = cache.get_many(["a", "b", "c"])
         assert res == {"a": 1, "b": 2, "c": 3}
 
-    def test_delete(self, cache: BaseCache):
+    def test_delete(self, cache: BaseCache) -> None:
         cache.set_many({"a": 1, "b": 2, "c": 3})
-        res = cache.delete("a")
-        assert bool(res) is True
+        assert cache.delete("a") is True
+        assert cache.get_many(["a", "b", "c"]) == {"b": 2, "c": 3}
+        assert cache.delete("a") is False
 
-        res = cache.get_many(["a", "b", "c"])
-        assert res == {"b": 2, "c": 3}
-
-        res = cache.delete("a")
-        assert bool(res) is False
-
-    def test_delete_many(self, cache: BaseCache):
+    def test_delete_many(self, cache: BaseCache) -> None:
         cache.set_many({"a": 1, "b": 2, "c": 3})
-        res = cache.delete_many(["a", "b"])
-        res = cache.get_many(["a", "b", "c"])
-        assert res == {"c": 3}
+        cache.delete_many(["a", "b"])
+        assert cache.get_many(["a", "b", "c"]) == {"c": 3}
 
-    def test_delete_many_generator(self, cache: BaseCache):
+    def test_delete_many_generator(self, cache: BaseCache) -> None:
         cache.set_many({"a": 1, "b": 2, "c": 3})
-        res = cache.delete_many(key for key in ["a", "b"])
+        cache.delete_many(key for key in ["a", "b"])
         res = cache.get_many(["a", "b", "c"])
         assert res == {"c": 3}
 
-    def test_delete_many_empty_generator(self, cache: BaseCache):
-        res = cache.delete_many(key for key in cast(List[str], []))
-        assert bool(res) is False
+    def test_delete_many_empty_generator(self, cache: BaseCache) -> None:
+        cache.delete_many(key for key in cast(List[str], []))
 
-    def test_incr(self, cache: BaseCache):
-
+    def test_incr(self, cache: BaseCache) -> None:
         cache.set("num", 1)
         cache.incr("num")
         res = cache.get("num")
@@ -198,7 +187,7 @@ class TestTheineCache:
         res = cache.get("num")
         assert res == 5
 
-    def test_incr_no_timeout(self, cache: BaseCache):
+    def test_incr_no_timeout(self, cache: BaseCache) -> None:
         cache.set("num", 1, timeout=None)
 
         cache.incr("num")
@@ -226,7 +215,7 @@ class TestTheineCache:
         res = cache.get("num")
         assert res == 5
 
-    def test_get_set_bool(self, cache: BaseCache):
+    def test_get_set_bool(self, cache: BaseCache) -> None:
         cache.set("bool", True)
         res = cache.get("bool")
 
@@ -239,7 +228,7 @@ class TestTheineCache:
         assert isinstance(res, bool)
         assert res is False
 
-    def test_version(self, cache: BaseCache):
+    def test_version(self, cache: BaseCache) -> None:
         cache.set("keytest", 2, version=2)
         res = cache.get("keytest")
         assert res is None
@@ -247,7 +236,7 @@ class TestTheineCache:
         res = cache.get("keytest", version=2)
         assert res == 2
 
-    def test_incr_version(self, cache: BaseCache):
+    def test_incr_version(self, cache: BaseCache) -> None:
         cache.set("keytest", 2)
         cache.incr_version("keytest")
 
@@ -257,7 +246,7 @@ class TestTheineCache:
         res = cache.get("keytest", version=2)
         assert res == 2
 
-    def test_ttl_incr_version_no_timeout(self, cache: BaseCache):
+    def test_ttl_incr_version_no_timeout(self, cache: BaseCache) -> None:
         cache.set("my_key", "hello world!", timeout=None)
 
         cache.incr_version("my_key")
@@ -266,14 +255,14 @@ class TestTheineCache:
 
         assert my_value == "hello world!"
 
-    def test_touch_zero_timeout(self, cache: BaseCache):
+    def test_touch_zero_timeout(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=10)
 
         assert cache.touch("test_key", 0) is True
         res = cache.get("test_key")
         assert res is None
 
-    def test_touch_positive_timeout(self, cache: BaseCache):
+    def test_touch_positive_timeout(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=10)
 
         assert cache.touch("test_key", 2) is True
@@ -281,35 +270,35 @@ class TestTheineCache:
         time.sleep(3)
         assert cache.get("test_key") is None
 
-    def test_touch_negative_timeout(self, cache: BaseCache):
+    def test_touch_negative_timeout(self, cache: BaseCache) -> None:
         cache.set("test_key", 222, timeout=10)
 
         assert cache.touch("test_key", -1) is True
         res = cache.get("test_key")
         assert res is None
 
-    def test_touch_missed_key(self, cache: BaseCache):
+    def test_touch_missed_key(self, cache: BaseCache) -> None:
         assert cache.touch("test_key_does_not_exist", 1) is False
 
-    def test_touch_forever(self, cache: Theine):
+    def test_touch_forever(self, cache: Theine) -> None:
         cache.set("test_key", "foo", timeout=1)
         result = cache.touch("test_key", None)
         assert result is True
         time.sleep(2)
         assert cache.get("test_key") == "foo"
 
-    def test_touch_forever_nonexistent(self, cache: BaseCache):
+    def test_touch_forever_nonexistent(self, cache: BaseCache) -> None:
         result = cache.touch("test_key_does_not_exist", None)
         assert result is False
 
-    def test_touch_default_timeout(self, cache: BaseCache):
+    def test_touch_default_timeout(self, cache: BaseCache) -> None:
         cache.set("test_key", "foo", timeout=1)
         result = cache.touch("test_key")
         assert result is True
         time.sleep(2)
         assert cache.get("test_key") == "foo"
 
-    def test_clear(self, cache: BaseCache):
+    def test_clear(self, cache: BaseCache) -> None:
         cache.set("foo", "bar")
         value_from_cache = cache.get("foo")
         assert value_from_cache == "bar"

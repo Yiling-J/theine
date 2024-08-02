@@ -8,13 +8,13 @@ from typing import Any, Dict, List
 from unittest.mock import Mock
 
 import pytest
-from bounded_zipf import Zipf
+from bounded_zipf import Zipf  # type: ignore[import]
 
 from theine import Cache, Memoize
 
 
 @Memoize(Cache("tlfu", 1000), None)
-def foo(id: int, m: Mock) -> Dict:
+def foo(id: int, m: Mock) -> dict[str, int]:
     m(id)
     return {"id": id}
 
@@ -97,7 +97,7 @@ class Bar:
         return {"id": id}
 
 
-def test_sync_decorator():
+def test_sync_decorator() -> None:
     mock = Mock()
     threads: List[Thread] = []
     assert foo.__name__ == "foo"  # type: ignore
@@ -118,7 +118,7 @@ def test_sync_decorator():
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
 
-def test_sync_decorator_empty():
+def test_sync_decorator_empty() -> None:
     threads: List[Thread] = []
 
     def assert_id():
@@ -134,7 +134,7 @@ def test_sync_decorator_empty():
 
 
 @pytest.mark.asyncio
-async def test_async_decorator():
+async def test_async_decorator() -> None:
     mock = Mock()
     assert async_foo.__name__ == "async_foo"  # type: ignore
 
@@ -149,7 +149,7 @@ async def test_async_decorator():
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
 
-def test_instance_method_sync():
+def test_instance_method_sync() -> None:
     mock = Mock()
     threads: List[Thread] = []
     bar = Bar()
@@ -172,7 +172,7 @@ def test_instance_method_sync():
 
 
 @pytest.mark.asyncio
-async def test_instance_method_async():
+async def test_instance_method_async() -> None:
     mock = Mock()
     bar = Bar()
     assert bar.async_foo.__name__ == "async_foo"  # type: ignore
@@ -193,8 +193,7 @@ def foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
     return {"a": a, "b": b, "c": c}
 
 
-def test_auto_key():
-
+def test_auto_key() -> None:
     tests = [
         ([1, 2, 3], {}, (1, 2, 3)),
         ([1, 2], {}, (1, 2, 5)),
@@ -219,8 +218,7 @@ async def async_foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
 
 
 @pytest.mark.asyncio
-async def test_auto_key_async():
-
+async def test_auto_key_async() -> None:
     tests = [
         ([1, 2, 3], {}, (1, 2, 3)),
         ([1, 2], {}, (1, 2, 5)),
@@ -239,7 +237,7 @@ async def test_auto_key_async():
         await assert_data(*case)
 
 
-def test_instance_method_auto_key_sync():
+def test_instance_method_auto_key_sync() -> None:
     mock = Mock()
     threads: List[Thread] = []
     bar = Bar()
@@ -261,7 +259,7 @@ def test_instance_method_auto_key_sync():
 
 
 @pytest.mark.asyncio
-async def test_instance_method_auto_key_async():
+async def test_instance_method_auto_key_async() -> None:
     mock = Mock()
     bar = Bar()
 
@@ -286,7 +284,7 @@ def _(id: int) -> str:
     return f"id-{id}"
 
 
-def test_timeout():
+def test_timeout() -> None:
     for i in range(30):
         result = foo_to(i)
         assert result["id"] == i
@@ -308,7 +306,7 @@ def foo_to_auto(id: int, m: Mock) -> Dict:
     return {"id": id}
 
 
-def test_timeout_auto_key():
+def test_timeout_auto_key() -> None:
     mock = Mock()
     for i in range(30):
         result = foo_to_auto(i, mock)
@@ -327,7 +325,7 @@ def test_timeout_auto_key():
     assert foo_to_auto._cache.key_gen.len() == 0
 
 
-def test_cache_full_evict():
+def test_cache_full_evict() -> None:
     mock = Mock()
     for i in range(30, 1500):
         result = foo_to_auto(i, mock)
@@ -336,7 +334,7 @@ def test_cache_full_evict():
     assert foo_to_auto._cache.key_gen.len() == 1000
 
 
-def test_cache_full_auto_key_sync_multi():
+def test_cache_full_auto_key_sync_multi() -> None:
     mock = Mock()
     threads: List[Thread] = []
 
@@ -356,11 +354,11 @@ def test_cache_full_auto_key_sync_multi():
 
 
 @Memoize(Cache("tlfu", 1000), timeout=None, lock=True)
-def read_auto_key(key: str):
+def read_auto_key(key: str) -> str:
     return key
 
 
-def assert_read_key(n: int):
+def assert_read_key(n: int) -> None:
     key = f"key:{n}"
     v = read_auto_key(key)
     assert v == key
@@ -369,7 +367,7 @@ def assert_read_key(n: int):
     print(".", end="")
 
 
-def test_cocurrency_load():
+def test_cocurrency_load() -> None:
     z = Zipf(1.0001, 10, 5000000)
     with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
         for _ in range(200000):
