@@ -19,7 +19,7 @@ class Cache(BaseCache):
         policy = options.get("POLICY", "tlfu")
         self.cache = Theine(policy, self._max_entries)
 
-    def _timeout_seconds(self, timeout: Optional[Union[float, Type[DEFAULT_TIMEOUT]]]) -> float:
+    def _timeout_seconds(self, timeout: Optional[Union[float, DEFAULT_TIMEOUT]]) -> float:
         if timeout == DEFAULT_TIMEOUT:
             return cast(float, self.default_timeout)
         return cast(float, timeout)
