@@ -33,8 +33,12 @@ bounded-zipf = "^1.0.0"
 django-stubs = "^5.0.2"
 
 [tool.mypy]
-plugins = ["mypy_django_plugin.main", ]
 strict = true
+plugins = ["mypy_django_plugin.main", ]
+exclude = [
+    "benchmarks",
+    "tests"
+]
 
 [tool.django-stubs]
 django_settings_module = 'theine'
