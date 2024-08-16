@@ -13,17 +13,24 @@ from typing import (
     Hashable,
     List,
     Optional,
-    Tuple,
+    TYPE_CHECKING, Tuple,
     Type,
     TypeVar,
     Union,
     cast, )
 
+from mypy_extensions import KwArg, VarArg
 from theine_core import ClockProCore, LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol
 
 from theine.exceptions import InvalidTTL
 from theine.models import CacheStats
+
+P = ParamSpec("P")
+R = TypeVar("R", covariant=True, bound=Any)
+R_A = TypeVar("R_A", covariant=True, bound=Union[Awaitable[Any], Callable[..., Any]])
+if TYPE_CHECKING:
+    from functools import _Wrapped
 
 sentinel = object()
 
@@ -104,10 +111,6 @@ CORES: Dict[str, Union[Type[Core], Type[ClockProCoreP]]] = {
     "lru": LruCore,
     "clockpro": ClockProCore,
 }
-
-P = ParamSpec("P")
-R = TypeVar("R", covariant=True, bound=Any)
-R_A = TypeVar("R_A", covariant=True, bound=Union[Awaitable[Any], Callable[..., Any]])
 
 
 @dataclass
@@ -244,7 +247,7 @@ class Memoize:
         self.typed = typed
         self.lock = lock
 
-    def __call__(self, fn: Callable[P, R_A]) -> Cached[P, R_A]:
+    def __call__(self, fn: Callable[P, R_A]) -> '_Wrapped[P, R_A, [VarArg(Any), KwArg(Any)], R_A]':
         wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, self.lock)
         return update_wrapper(wrapper, fn)
 
