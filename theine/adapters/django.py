@@ -1,6 +1,6 @@
 from datetime import timedelta
 from threading import Lock
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union, cast
 
 from django.core.cache.backends.base import BaseCache, DEFAULT_TIMEOUT
 
@@ -19,17 +19,21 @@ class Cache(BaseCache):
         policy = options.get("POLICY", "tlfu")
         self.cache = Theine(policy, self._max_entries)
 
+    def _timeout_seconds(self, timeout: Union[int, DEFAULT_TIMEOUT]) -> Optional[float]:
+        if timeout == DEFAULT_TIMEOUT:
+            return self.default_timeout
+        return timeout
+
     def add(self, key: KEY_TYPE, value: VALUE_TYPE, timeout: Optional[float] = DEFAULT_TIMEOUT,
             version: VERSION_TYPE = None) -> bool:
         data = self.get(key, sentinel, version)
         if data is not sentinel:
             return False
         key = self.make_key(key, version)
-        backend_timeout = self.get_backend_timeout(timeout)
         self.cache.set(
             key,
             value,
-            timedelta(seconds=backend_timeout) if backend_timeout else None,
+            timedelta(seconds=cast(float, timeout)) if timeout is not DEFAULT_TIMEOUT else None,
         )
         return True
 
@@ -40,7 +44,7 @@ class Cache(BaseCache):
 
     def set(self, key: KEY_TYPE, value: VALUE_TYPE, timeout: Optional[float] = DEFAULT_TIMEOUT,
             version: VERSION_TYPE = None) -> None:
-        to = self.get_backend_timeout(timeout)
+        to = self._timeout_seconds(timeout)
         if to is not None and to <= 0:
             self.delete(key)
             return
@@ -63,7 +67,7 @@ class Cache(BaseCache):
         ):
             self.cache.delete(nkey)
             return True
-        to = self.get_backend_timeout(timeout)
+        to = self._timeout_seconds(timeout)
         with Lock():
             self.cache._access(nkey, timedelta(seconds=to) if to is not None else None)
         return True
