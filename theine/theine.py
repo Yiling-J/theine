@@ -64,7 +64,7 @@ class Core(Protocol):
     def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, cache: list[Any], sentinel: Any, kh: dict[int, Hashable], hk: dict[Hashable, int]) -> None:
+    def advance(self, cache: List[Any], sentinel: Any, kh: Dict[int, Hashable], hk: Dict[Hashable, int]) -> None:
         ...
 
     def clear(self) -> None:
@@ -89,7 +89,7 @@ class ClockProCoreP(Protocol):
     def access(self, key: str) -> Optional[int]:
         ...
 
-    def advance(self, cache: list[Any], sentinel: Any, kh: dict[int, Hashable], hk: dict[Hashable, int]) -> None:
+    def advance(self, cache: List[Any], sentinel: Any, kh: Dict[int, Hashable], hk: Dict[Hashable, int]) -> None:
         ...
 
     def clear(self) -> None:
@@ -107,7 +107,7 @@ CORES: Dict[str, Union[Type[Core], Type[ClockProCoreP]]] = {
 
 P = ParamSpec("P")
 R = TypeVar("R", covariant=True, bound=Any)
-R_A = TypeVar("R_A", covariant=True, bound=Awaitable[Any] | Callable[..., Any])
+R_A = TypeVar("R_A", covariant=True, bound=Union[Awaitable[Any], Callable[..., Any]])
 
 
 @dataclass

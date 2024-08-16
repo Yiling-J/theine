@@ -14,7 +14,7 @@ from theine import Cache, Memoize
 
 
 @Memoize(Cache("tlfu", 1000), None)
-def foo(id: int, m: Mock) -> dict[str, int]:
+def foo(id: int, m: Mock) -> Dict[str, int]:
     m(id)
     return {"id": id}
 

@@ -1,6 +1,6 @@
 from datetime import timedelta
 from threading import Lock
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 from django.core.cache.backends.base import BaseCache, DEFAULT_TIMEOUT
 
@@ -13,7 +13,7 @@ VERSION_TYPE = Optional[int]
 
 
 class Cache(BaseCache):
-    def __init__(self, name: str, params: dict[str, Any]):
+    def __init__(self, name: str, params: Dict[str, Any]):
         super().__init__(params)
         options = params.get("OPTIONS", {})
         policy = options.get("POLICY", "tlfu")
