@@ -1,6 +1,6 @@
 from datetime import timedelta
 from threading import Lock
-from typing import Any, Callable, Dict, Optional, Union, cast
+from typing import Any, Callable, Dict, Optional, Type, Union, cast
 
 from django.core.cache.backends.base import BaseCache, DEFAULT_TIMEOUT
 
@@ -19,10 +19,10 @@ class Cache(BaseCache):
         policy = options.get("POLICY", "tlfu")
         self.cache = Theine(policy, self._max_entries)
 
-    def _timeout_seconds(self, timeout: Union[int, DEFAULT_TIMEOUT]) -> Optional[float]:
+    def _timeout_seconds(self, timeout: Optional[Union[float, Type[DEFAULT_TIMEOUT]]]) -> float:
         if timeout == DEFAULT_TIMEOUT:
-            return self.default_timeout
-        return timeout
+            return cast(float, self.default_timeout)
+        return cast(float, timeout)
 
     def add(self, key: KEY_TYPE, value: VALUE_TYPE, timeout: Optional[float] = DEFAULT_TIMEOUT,
             version: VERSION_TYPE = None) -> bool:
