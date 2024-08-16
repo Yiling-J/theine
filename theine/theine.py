@@ -17,8 +17,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
-)
+    cast, )
 
 from theine_core import ClockProCore, LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol
@@ -161,7 +160,6 @@ def Wrapper(
     fn: Callable[P, R_A],
     timeout: Optional[timedelta],
     cache: "Cache",
-    coro: bool,
     typed: bool,
     lock: bool,
 ) -> Cached[P, R_A]:
@@ -169,7 +167,6 @@ def Wrapper(
     _events: Dict[Hashable, EventData] = {}
     _func: Callable[P, R_A] = fn
     _cache: "Cache" = cache
-    _coro: bool = coro
     _timeout: Optional[timedelta] = timeout
     _typed: bool = typed
     _auto_key: bool = True
@@ -187,10 +184,10 @@ def Wrapper(
         else:
             key = _key_func(*args, **kwargs)  # type: ignore
 
-        if _coro:
+        if inspect.iscoroutinefunction(fn):
             result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = CachedAwaitable(_func(*args, **kwargs))
+                result = CachedAwaitable(cast(Awaitable[Any], _func(*args, **kwargs)))
                 _cache.set(key, result, _timeout)
             return cast(R_A, result)
 
@@ -248,8 +245,7 @@ class Memoize:
         self.lock = lock
 
     def __call__(self, fn: Callable[P, R_A]) -> Cached[P, R_A]:
-        coro = inspect.iscoroutinefunction(fn)
-        wrapper = Wrapper(fn, self.timeout, self.cache, coro, self.typed, self.lock)
+        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, self.lock)
         return update_wrapper(wrapper, fn)
 
 
