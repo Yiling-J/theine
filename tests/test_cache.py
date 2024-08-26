@@ -62,9 +62,6 @@ def test_set_with_ttl() -> None:
             break
     assert counter < 10
 
-    for shard in cache._shards:
-        print(shard._map, shard._key_map)
-
     for i in range(30):
         assert cache.get(f"key:{i}:2", None) is not None
 

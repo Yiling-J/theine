@@ -200,6 +200,8 @@ class Shard:
         # key map is used to find evicted entries in _map because policy returns hashed key value
         self._key_map: Dict[int, Any] = {}
         self._mutex: Lock = Lock()
+        self._hits: int = 0
+        self._misses: int = 0
 
     def get(self, key: Hashable, default: Any = None) -> Any:
         with self._mutex:
@@ -207,7 +209,9 @@ class Shard:
             if entry is None or (
                 entry.expire > 0 and entry.expire <= time.monotonic_ns()
             ):
+                self._misses += 1
                 return default
+            self._hits += 1
             return entry.value
 
     def set(self, key: Hashable, key_hash: int, value: Any, ttl: int) -> bool:
@@ -381,4 +385,10 @@ class Cache:
         self.close()
 
     def stats(self) -> CacheStats:
-        return CacheStats(self._total, self._hit)
+        misses = 0
+        hits = 0
+        for shard in self._shards:
+            with shard._mutex:
+                hits += shard._hits
+                misses += shard._misses
+        return CacheStats(hits + misses, hits)
