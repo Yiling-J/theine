@@ -144,7 +144,8 @@ def test_close_cache() -> None:
         cache = Cache(500)
         cache.set("foo", "bar", timedelta(seconds=60))
         cache.close()
-        assert cache._maintainer.is_alive() is False
+        sleep(1)
+        assert cache._maintainer.done() is True
 
 
 def test_cache_stats() -> None:

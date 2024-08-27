@@ -46,6 +46,18 @@ if TYPE_CHECKING:
 sentinel = object()
 
 
+_maintainer_loop = asyncio.new_event_loop()
+
+
+def _maintance():
+    asyncio.set_event_loop(_maintainer_loop)
+    _maintainer_loop.run_forever()
+
+
+_maintainer_thread = Thread(target=_maintance, daemon=True)
+_maintainer_thread.start()
+
+
 @dataclass
 class EventData:
     event: Event
@@ -289,7 +301,6 @@ class Cache:
         self._shards: List[Shard] = [Shard() for _ in range(shard_count)]
         self.core = TlfuCore(size)
         self._closed = False
-        self._maintainer = Thread(target=self.maintenance, daemon=True)
         self._total = 0
         self._hit = 0
         self.max_size = size
@@ -299,8 +310,9 @@ class Cache:
         self._write_buffer = WriteBuffer(self._drain_write)
         # core is single thread, all core operation must hold this mutex
         self._core_mutex = Lock()
-
-        self._maintainer.start()
+        self._maintainer = asyncio.run_coroutine_threadsafe(
+            self.maintenance(), loop=_maintainer_loop
+        )
 
     def __len__(self) -> int:
         total = 0
@@ -388,18 +400,20 @@ class Cache:
         self._write_buffer.add(kh, -1)
         return success
 
-    def maintenance(self) -> None:
+    async def maintenance(self) -> None:
         """
         Remove expired keys.
         """
-        while not self._closed:
+        while True:
 
             evicted: List[int] = []
             with self._core_mutex:
+                if self._closed:
+                    return
                 evicted = self.core.advance()
             for key in evicted:
                 self._shards[key & (self._shard_count - 1)].remove_expired(key)
-            time.sleep(1)
+            await asyncio.sleep(1)
 
     def clear(self) -> None:
         self._force_drain_write()
@@ -409,8 +423,8 @@ class Cache:
             shard.clear()
 
     def close(self) -> None:
-        self._closed = True
-        self._maintainer.join()
+        with self._core_mutex:
+            self._closed = True
 
     def __del__(self) -> None:
         self.clear()
