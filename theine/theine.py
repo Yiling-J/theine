@@ -203,13 +203,15 @@ class Shard:
         self._hits: int = 0
         self._misses: int = 0
 
-    def get(self, key: Hashable, default: Any = None) -> Any:
+    def get(self, key: Hashable, key_hash: int, default: Any = None) -> Any:
         with self._mutex:
             entry = self._map.get(key)
             if entry is None or (
                 entry.expire > 0 and entry.expire <= time.monotonic_ns()
             ):
                 self._misses += 1
+                self._map.pop(key, sentinel)
+                self._key_map.pop(key_hash, sentinel)
                 return default
             self._hits += 1
             return entry.value
@@ -229,11 +231,39 @@ class Shard:
             self._key_map[key_hash] = key
             return True
 
-    def remove(self, key_hash: int):
+    def set_ttl(self, key: Hashable, ttl: int):
+        with self._mutex:
+            entry = self._map.get(key, sentinel)
+            if entry != sentinel:
+                expire = 0
+                if ttl > 0:
+                    expire = time.monotonic_ns() + ttl
+                entry.expire = expire
+
+    def remove(self, key_hash: int) -> bool:
         with self._mutex:
             key = self._key_map.pop(key_hash, sentinel)
             if key != sentinel:
                 self._map.pop(key)
+            return key != sentinel
+
+    # check expire before remove, used in timer wheel expire only,
+    # set(key, ttl1) -> ttl1_sync_to_policy -> set(key, ttl2) -> ttl1 expired -> key_removed -> ttl2_sync_to_policy
+    # the key is already removed when policy aware ttl changed, make ttl2 no effect
+    def remove_expired(self, key_hash: int):
+        with self._mutex:
+            key = self._key_map.get(key_hash, sentinel)
+            if key != sentinel:
+                entry = self._map.get(key)
+                # expired, removed
+                if entry.expire <= time.monotonic_ns():
+                    self._key_map.pop(key_hash, sentinel)
+                    self._map.pop(key, sentinel)
+
+    def clear(self):
+        with self._mutex:
+            self._map.clear()
+            self._key_map.clear()
 
     def __len__(self) -> int:
         with self._mutex:
@@ -287,7 +317,7 @@ class Cache:
         """
         kh = spread(hash(key))
 
-        v = self._shards[kh & (self._shard_count - 1)].get(key, default)
+        v = self._shards[kh & (self._shard_count - 1)].get(key, kh, default)
         self._read_buffer.add(kh)
         return v
 
@@ -303,7 +333,7 @@ class Cache:
         for key in evicted:
             self._shards[key & (self._shard_count - 1)].remove(key)
 
-    # used in test only, send writer buffer to policy
+    # send writer buffer to policy immediately, used in test and clear
     def _force_drain_write(self):
         with self._core_mutex:
             evicted = self.core.set(self._write_buffer.buffer)
@@ -315,14 +345,14 @@ class Cache:
     # used in Django adapter touch method, sets a new expiration for a key
     def _access(self, key: Hashable, ttl: Optional[timedelta] = None) -> None:
         kh = spread(hash(key))
-        ttl_ns = None
+        ttl_ns = 0
         if ttl is not None:
             seconds = ttl.total_seconds()
             if seconds == 0:
                 raise Exception("ttl must be positive")
             ttl_ns = int(seconds * 1e9)
-            self._shards[kh & (self._shard_count - 1)].update_ttl(key, ttl_ns)
-            self._write_buffer.add(kh, ttl_ns)
+        self._shards[kh & (self._shard_count - 1)].set_ttl(key, ttl_ns)
+        self._write_buffer.add(kh, ttl_ns)
 
     def set(
         self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
@@ -354,9 +384,9 @@ class Cache:
         :param key: key hashable, use str/int for best performance.
         """
         kh = spread(hash(key))
-        self._shards[kh & (self._shard_count - 1)].remove(kh)
+        success = self._shards[kh & (self._shard_count - 1)].remove(kh)
         self._write_buffer.add(kh, -1)
-        return False
+        return success
 
     def maintenance(self) -> None:
         """
@@ -368,12 +398,15 @@ class Cache:
             with self._core_mutex:
                 evicted = self.core.advance()
             for key in evicted:
-                self._shards[key & (self._shard_count - 1)].remove(key)
+                self._shards[key & (self._shard_count - 1)].remove_expired(key)
             time.sleep(1)
 
     def clear(self) -> None:
+        self._force_drain_write()
         with self._core_mutex:
             self.core.clear()
+        for shard in self._shards:
+            shard.clear()
 
     def close(self) -> None:
         self._closed = True

@@ -128,6 +128,17 @@ def test_expire_proactively() -> None:
             break
 
 
+def test_clear_cache() -> None:
+    cache = Cache(500)
+    for i in range(5000):
+        cache.set((i, 2), i, timedelta(seconds=randint(5, 10)))
+    sleep(1)
+
+    cache.clear()
+    assert len(cache) == 0
+    assert cache.core.len() == 0
+
+
 def test_close_cache() -> None:
     for _ in range(10):
         cache = Cache(500)
