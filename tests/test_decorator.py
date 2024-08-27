@@ -13,7 +13,7 @@ from bounded_zipf import Zipf  # type: ignore[import]
 from theine import Cache, Memoize
 
 
-@Memoize(Cache("tlfu", 1000), None)
+@Memoize(Cache(1000), None)
 def foo(id: int, m: Mock) -> Dict[str, int]:
     m(id)
     return {"id": id}
@@ -24,7 +24,7 @@ def _(id: int, m: Mock) -> str:
     return f"id-{id}"
 
 
-@Memoize(Cache("tlfu", 1000), None)
+@Memoize(Cache(1000), None)
 def foo_empty() -> Dict:
     return {"id": "empty"}
 
@@ -34,7 +34,7 @@ def _() -> str:
     return "empty"
 
 
-@Memoize(Cache("tlfu", 1000), None)
+@Memoize(Cache(1000), None)
 async def async_foo(id: int, m: Mock) -> Dict:
     m(id)
     await asyncio.sleep(1)
@@ -47,7 +47,7 @@ def _(id: int, m: Mock) -> str:
 
 
 class Bar:
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(Cache(1000), None)
     def foo(self, id: int, m: Mock) -> Dict:
         m(id)
         return {"id": id}
@@ -56,7 +56,7 @@ class Bar:
     def _(self, id: int, m: Mock) -> str:
         return f"id-{id}"
 
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(Cache(1000), None)
     async def async_foo(self, id: int, m: Mock) -> Dict:
         m(id)
         await asyncio.sleep(1)
@@ -66,7 +66,7 @@ class Bar:
     def _(self, id: int, m: Mock) -> str:
         return f"id-{id}"
 
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(Cache(1000), None)
     def foo_empty(self) -> str:
         return "empty"
 
@@ -74,7 +74,7 @@ class Bar:
     def _(self) -> str:
         return "empty"
 
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(Cache(1000), None)
     @classmethod
     def foo_class(cls, id: int, m: Mock) -> Dict:
         m(id)
@@ -85,12 +85,12 @@ class Bar:
         m(id)
         return f"id-{id}"
 
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(Cache(1000), None)
     def foo_auto(self, id: int, m: Mock) -> Dict:
         m(id)
         return {"id": id}
 
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(Cache(1000), None)
     async def async_foo_auto(self, id: int, m: Mock) -> Dict:
         m(id)
         await asyncio.sleep(1)
@@ -188,7 +188,7 @@ async def test_instance_method_async() -> None:
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
 
-@Memoize(Cache("tlfu", 1000), None)
+@Memoize(Cache(1000), None)
 def foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
     return {"a": a, "b": b, "c": c}
 
@@ -212,7 +212,7 @@ def test_auto_key() -> None:
         assert_data(*case)
 
 
-@Memoize(Cache("tlfu", 1000), None)
+@Memoize(Cache(1000), None)
 async def async_foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
     return {"a": a, "b": b, "c": c}
 
@@ -274,7 +274,7 @@ async def test_instance_method_auto_key_async() -> None:
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
 
-@Memoize(Cache("tlfu", 1000), timedelta(seconds=1))
+@Memoize(Cache(1000), timedelta(seconds=1))
 def foo_to(id: int) -> Dict:
     return {"id": id}
 
@@ -289,6 +289,7 @@ def test_timeout() -> None:
         result = foo_to(i)
         assert result["id"] == i
     assert len(foo_to._cache) == 30
+    foo_to._cache._force_drain_write()
     current = 30
     counter = 0
     while True:
@@ -300,7 +301,7 @@ def test_timeout() -> None:
             break
 
 
-@Memoize(Cache("tlfu", 1000), timedelta(seconds=1))
+@Memoize(Cache(1000), timedelta(seconds=1))
 def foo_to_auto(id: int, m: Mock) -> Dict:
     m(id)
     return {"id": id}
@@ -312,7 +313,7 @@ def test_timeout_auto_key() -> None:
         result = foo_to_auto(i, mock)
         assert result["id"] == i
     assert len(foo_to_auto._cache) == 30
-    assert foo_to_auto._cache.key_gen.len() == 30
+    foo_to_auto._cache._force_drain_write()
     current = 30
     counter = 0
     while True:
@@ -322,7 +323,6 @@ def test_timeout_auto_key() -> None:
         current = len(foo_to._cache)
         if current == 0:
             break
-    assert foo_to_auto._cache.key_gen.len() == 0
 
 
 def test_cache_full_evict() -> None:
@@ -330,8 +330,8 @@ def test_cache_full_evict() -> None:
     for i in range(30, 1500):
         result = foo_to_auto(i, mock)
         assert result["id"] == i
+    foo_to_auto._cache._force_drain_write()
     assert len(foo_to_auto._cache) == 1000
-    assert foo_to_auto._cache.key_gen.len() == 1000
 
 
 def test_cache_full_auto_key_sync_multi() -> None:
@@ -349,11 +349,11 @@ def test_cache_full_auto_key_sync_multi() -> None:
     for t in threads:
         t.join()
 
+    foo_to_auto._cache._force_drain_write()
     assert len(foo_to_auto._cache) == 1000
-    assert foo_to_auto._cache.key_gen.len() == 1000
 
 
-@Memoize(Cache("tlfu", 1000), timeout=None, lock=True)
+@Memoize(Cache(1000), timeout=None, lock=True)
 def read_auto_key(key: str) -> str:
     return key
 
@@ -363,7 +363,6 @@ def assert_read_key(n: int) -> None:
     v = read_auto_key(key)
     assert v == key
     assert len(read_auto_key._cache) < 2000
-    assert foo_to_auto._cache.key_gen.len() < 2000
     print(".", end="")
 
 
@@ -375,4 +374,4 @@ def test_cocurrency_load() -> None:
             exception = future.exception()
             if exception:
                 raise exception
-    print("==== done ====", len(read_auto_key._cache), foo_to_auto._cache.key_gen.len())
+    print("==== done ====", len(read_auto_key._cache))

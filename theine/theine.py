@@ -369,8 +369,7 @@ class Cache:
                 evicted = self.core.advance()
             for key in evicted:
                 self._shards[key & (self._shard_count - 1)].remove(key)
-
-            time.sleep(0.5)
+            time.sleep(1)
 
     def clear(self) -> None:
         with self._core_mutex:
