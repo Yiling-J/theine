@@ -66,6 +66,48 @@ def test_set_with_ttl() -> None:
         assert cache.get(f"key:{i}:2", None) is not None
 
 
+def test_set_with_ttl_multi_instances() -> None:
+    caches = []
+    for i in range(30):
+        caches.append(Cache(500))
+
+    for cache in caches:
+        for i in range(30):
+            key = f"key:{i}"
+            cache.set(key, key, timedelta(seconds=1 + randint(0, 5)))
+        cache._force_drain_write()
+        assert len(cache) == 30
+
+    sleep(8)
+    for cache in caches:
+        assert len(cache) == 0
+
+
+class SameHash:
+
+    def __init__(self, i):
+        self.i = i
+
+    def __hash__(self):
+        return 3245671
+
+    def __eq__(self, other):
+        return other == self.i
+
+
+def test_collision() -> None:
+    cache = Cache(500)
+    for i in range(30):
+        e = SameHash(i)
+        cache.set(e, e, timedelta(seconds=i + 5))
+    # only the last entry exists because all entries have same hash
+    cache._force_drain_write()
+    assert len(cache) == 1
+    assert (cache.core.len()) == 1
+    obj = cache.get(SameHash(29))
+    assert obj.i == 29
+
+
 def test_delete() -> None:
     cache = Cache(100)
     for i in range(20):
