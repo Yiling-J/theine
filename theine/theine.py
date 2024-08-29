@@ -178,7 +178,7 @@ class Memoize:
     is also the recommended mode. You must specify the key function manually. Second one is auto-key mode,
     Theine will generate a key for you based on your function inputs.
 
-    :param cache: cache instance from Cache class.
+    :param size: cache size.
     :param timeout: timedelta to store the function result. Default is None which means no expiration.
     :param typed: Only valid with auto-key mode. If typed is set to true,
         function arguments of different types will be cached separately.
@@ -190,12 +190,12 @@ class Memoize:
 
     def __init__(
         self,
-        cache: "Cache",
+        size: int,
         timeout: Optional[timedelta],
         typed: bool = False,
         lock: bool = False,
     ):
-        self.cache = cache
+        self.cache = Cache(size)
         self.timeout = timeout
         self.typed = typed
         self.lock = lock

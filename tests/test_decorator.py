@@ -10,10 +10,10 @@ from unittest.mock import Mock
 import pytest
 from bounded_zipf import Zipf  # type: ignore[import]
 
-from theine import Cache, Memoize
+from theine import Memoize
 
 
-@Memoize(Cache(1000), None)
+@Memoize(1000, None)
 def foo(id: int, m: Mock) -> Dict[str, int]:
     m(id)
     return {"id": id}
@@ -24,7 +24,7 @@ def _(id: int, m: Mock) -> str:
     return f"id-{id}"
 
 
-@Memoize(Cache(1000), None)
+@Memoize(1000, None)
 def foo_empty() -> Dict:
     return {"id": "empty"}
 
@@ -34,7 +34,7 @@ def _() -> str:
     return "empty"
 
 
-@Memoize(Cache(1000), None)
+@Memoize(1000, None)
 async def async_foo(id: int, m: Mock) -> Dict:
     m(id)
     await asyncio.sleep(1)
@@ -47,7 +47,7 @@ def _(id: int, m: Mock) -> str:
 
 
 class Bar:
-    @Memoize(Cache(1000), None)
+    @Memoize(1000, None)
     def foo(self, id: int, m: Mock) -> Dict:
         m(id)
         return {"id": id}
@@ -56,7 +56,7 @@ class Bar:
     def _(self, id: int, m: Mock) -> str:
         return f"id-{id}"
 
-    @Memoize(Cache(1000), None)
+    @Memoize(1000, None)
     async def async_foo(self, id: int, m: Mock) -> Dict:
         m(id)
         await asyncio.sleep(1)
@@ -66,7 +66,7 @@ class Bar:
     def _(self, id: int, m: Mock) -> str:
         return f"id-{id}"
 
-    @Memoize(Cache(1000), None)
+    @Memoize(1000, None)
     def foo_empty(self) -> str:
         return "empty"
 
@@ -74,7 +74,7 @@ class Bar:
     def _(self) -> str:
         return "empty"
 
-    @Memoize(Cache(1000), None)
+    @Memoize(1000, None)
     @classmethod
     def foo_class(cls, id: int, m: Mock) -> Dict:
         m(id)
@@ -85,12 +85,12 @@ class Bar:
         m(id)
         return f"id-{id}"
 
-    @Memoize(Cache(1000), None)
+    @Memoize(1000, None)
     def foo_auto(self, id: int, m: Mock) -> Dict:
         m(id)
         return {"id": id}
 
-    @Memoize(Cache(1000), None)
+    @Memoize(1000, None)
     async def async_foo_auto(self, id: int, m: Mock) -> Dict:
         m(id)
         await asyncio.sleep(1)
@@ -188,7 +188,7 @@ async def test_instance_method_async() -> None:
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
 
-@Memoize(Cache(1000), None)
+@Memoize(1000, None)
 def foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
     return {"a": a, "b": b, "c": c}
 
@@ -212,7 +212,7 @@ def test_auto_key() -> None:
         assert_data(*case)
 
 
-@Memoize(Cache(1000), None)
+@Memoize(1000, None)
 async def async_foo_auto_key(a: int, b: int, c: int = 5) -> Dict:
     return {"a": a, "b": b, "c": c}
 
@@ -274,7 +274,7 @@ async def test_instance_method_auto_key_async() -> None:
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
 
-@Memoize(Cache(1000), timedelta(seconds=1))
+@Memoize(1000, timedelta(seconds=1))
 def foo_to(id: int) -> Dict:
     return {"id": id}
 
@@ -301,7 +301,7 @@ def test_timeout() -> None:
             break
 
 
-@Memoize(Cache(1000), timedelta(seconds=1))
+@Memoize(1000, timedelta(seconds=1))
 def foo_to_auto(id: int, m: Mock) -> Dict:
     m(id)
     return {"id": id}
@@ -353,7 +353,7 @@ def test_cache_full_auto_key_sync_multi() -> None:
     assert len(foo_to_auto._cache) == 1000
 
 
-@Memoize(Cache(1000), timeout=None, lock=True)
+@Memoize(1000, timeout=None, lock=True)
 def read_auto_key(key: str) -> str:
     return key
 
