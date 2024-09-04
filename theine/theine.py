@@ -35,6 +35,7 @@ from theine.models import CacheStats, Entry
 from theine.striped_buffer import StripedBuffer
 from theine.write_buffer import WriteBuffer
 from theine.utils import round_up_power_of_2
+import itertools
 
 
 S = TypeVar("S", contravariant=True)
@@ -212,21 +213,24 @@ class Shard:
         # key map is used to find evicted entries in _map because policy returns hashed key value
         self._key_map: Dict[int, Any] = {}
         self._mutex: Lock = Lock()
-        self._hits: int = 0
-        self._misses: int = 0
+        self._hits = itertools.count()
+        self._misses = itertools.count()
 
     def get(self, key: Hashable, key_hash: int, default: Any = None) -> Any:
-        with self._mutex:
-            entry = self._map.get(key)
-            if entry is None or (
-                entry.expire > 0 and entry.expire <= time.monotonic_ns()
-            ):
-                self._misses += 1
-                self._map.pop(key, sentinel)
-                self._key_map.pop(key_hash, sentinel)
-                return default
-            self._hits += 1
-            return entry.value
+        try:
+            entry = self._map[key]
+            if  entry.expire > 0 and entry.expire <= time.monotonic_ns():
+                next(self._misses)
+                with self._mutex:
+                    self._map.pop(key, sentinel)
+                    self._key_map.pop(key_hash, sentinel)
+                    return default
+            else:
+                next(self._hits)
+                return entry.value
+        except KeyError:
+            next(self._misses)
+            return default
 
     def set(self, key: Hashable, key_hash: int, value: Any, ttl: int) -> bool:
         with self._mutex:
@@ -328,7 +332,6 @@ class Cache:
         :param default: returned value if key is not found in cache, default None.
         """
         kh = spread(hash(key))
-
         v = self._shards[kh & (self._shard_count - 1)].get(key, kh, default)
         self._read_buffer.add(kh)
         return v
@@ -435,6 +438,6 @@ class Cache:
         hits = 0
         for shard in self._shards:
             with shard._mutex:
-                hits += shard._hits
-                misses += shard._misses
+                hits += next(shard._hits)
+                misses += next(shard._misses)
         return CacheStats(hits + misses, hits)

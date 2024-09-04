@@ -19,12 +19,12 @@ class StripedBuffer:
         index = getrandbits(32) & (self.buffer_count - 1)
         waiting = []
 
-        # skip is acquire lock failed, lossy1
+        # skip if acquire lock failed, lossy1
         if self.mutexes[index].acquire(blocking=False):
             bs = len(self.buffers[index])
             # skip if buffer items count >= buffer size, lossy2
             if bs >= self.buffer_size:
-                self.mutexes[index]
+                self.mutexes[index].release()
                 return
             self.buffers[index].append(hash_value)
             if bs == self.buffer_size - 1:
