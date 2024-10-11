@@ -8,27 +8,31 @@ from functools import _make_key, update_wrapper
 from threading import Event, Thread
 from typing import (
     Any,
-    Awaitable, Callable,
+    Awaitable,
+    Callable,
     Dict,
     Hashable,
     List,
     Optional,
-    TYPE_CHECKING, Tuple,
+    TYPE_CHECKING,
+    Tuple,
     Type,
     TypeVar,
     Union,
-    cast, )
+    cast,
+    overload,
+    no_type_check,
+)
 
-from mypy_extensions import KwArg, VarArg
 from theine_core import ClockProCore, LruCore, TlfuCore
-from typing_extensions import ParamSpec, Protocol
+from typing_extensions import ParamSpec, Protocol, Concatenate
 
 from theine.exceptions import InvalidTTL
 from theine.models import CacheStats
 
+S = TypeVar("S", contravariant=True)
 P = ParamSpec("P")
 R = TypeVar("R", covariant=True, bound=Any)
-R_A = TypeVar("R_A", covariant=True, bound=Union[Awaitable[Any], Callable[..., Any]])
 if TYPE_CHECKING:
     from functools import _Wrapped
 
@@ -59,51 +63,49 @@ class KeyGen:
 
 
 class Core(Protocol):
-    def __init__(self, size: int):
-        ...
+    def __init__(self, size: int): ...
 
-    def set(self, key: str, ttl: int) -> Tuple[int, Optional[int], Optional[str]]:
-        ...
+    def set(self, key: str, ttl: int) -> Tuple[int, Optional[int], Optional[str]]: ...
 
-    def remove(self, key: str) -> Optional[int]:
-        ...
+    def remove(self, key: str) -> Optional[int]: ...
 
-    def access(self, key: str) -> Optional[int]:
-        ...
+    def access(self, key: str) -> Optional[int]: ...
 
-    def advance(self, cache: List[Any], sentinel: Any, kh: Dict[int, Hashable], hk: Dict[Hashable, int]) -> None:
-        ...
+    def advance(
+        self,
+        cache: List[Any],
+        sentinel: Any,
+        kh: Dict[int, Hashable],
+        hk: Dict[Hashable, int],
+    ) -> None: ...
 
-    def clear(self) -> None:
-        ...
+    def clear(self) -> None: ...
 
-    def len(self) -> int:
-        ...
+    def len(self) -> int: ...
 
 
 class ClockProCoreP(Protocol):
-    def __init__(self, size: int):
-        ...
+    def __init__(self, size: int): ...
 
     def set(
         self, key: str, ttl: int
-    ) -> Tuple[int, Optional[int], Optional[int], Optional[str]]:
-        ...
+    ) -> Tuple[int, Optional[int], Optional[int], Optional[str]]: ...
 
-    def remove(self, key: str) -> Optional[int]:
-        ...
+    def remove(self, key: str) -> Optional[int]: ...
 
-    def access(self, key: str) -> Optional[int]:
-        ...
+    def access(self, key: str) -> Optional[int]: ...
 
-    def advance(self, cache: List[Any], sentinel: Any, kh: Dict[int, Hashable], hk: Dict[Hashable, int]) -> None:
-        ...
+    def advance(
+        self,
+        cache: List[Any],
+        sentinel: Any,
+        kh: Dict[int, Hashable],
+        hk: Dict[Hashable, int],
+    ) -> None: ...
 
-    def clear(self) -> None:
-        ...
+    def clear(self) -> None: ...
 
-    def len(self) -> int:
-        ...
+    def len(self) -> int: ...
 
 
 CORES: Dict[str, Union[Type[Core], Type[ClockProCoreP]]] = {
@@ -149,54 +151,61 @@ class Key:
         self.event = Event()
 
 
-class Cached(Protocol[P, R_A]):
+class Cached(Protocol[S, P, R]):
     _cache: "Cache"
 
-    def key(self, fn: Callable[P, Hashable]) -> None:
-        ...
+    @overload
+    def key(self, fn: Callable[P, Hashable]) -> None: ...
 
-    def __call__(self, *args: Any, **kwargs: Any) -> R_A:
-        ...
+    @overload
+    def key(self, fn: Callable[Concatenate[S, P], Hashable]) -> None: ...
+
+    @overload
+    def __call__(self, _arg_first: S, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+    @overload
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
 
 
+@no_type_check
 def Wrapper(
-    fn: Callable[P, R_A],
+    fn: Callable,
     timeout: Optional[timedelta],
     cache: "Cache",
     typed: bool,
     lock: bool,
-) -> Cached[P, R_A]:
-    _key_func: Optional[Callable[..., Hashable]] = None
-    _events: Dict[Hashable, EventData] = {}
-    _func: Callable[P, R_A] = fn
-    _cache: "Cache" = cache
-    _timeout: Optional[timedelta] = timeout
-    _typed: bool = typed
-    _auto_key: bool = True
+):
+    _key_func = None
+    _events = {}
+    _func = fn
+    _cache = cache
+    _timeout = timeout
+    _typed = typed
+    _auto_key = True
     _lock = lock
 
-    def key(fn: Callable[P, Hashable]) -> None:
+    def key(fn) -> None:
         nonlocal _key_func
         nonlocal _auto_key
         _key_func = fn
         _auto_key = False
 
-    def fetch(*args: P.args, **kwargs: P.kwargs) -> R_A:
+    def fetch(*args, **kwargs):
         if _auto_key:
             key = _make_key(args, kwargs, _typed)
         else:
-            key = _key_func(*args, **kwargs)  # type: ignore
+            key = _key_func(*args, **kwargs)
 
         if inspect.iscoroutinefunction(fn):
             result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = CachedAwaitable(cast(Awaitable[Any], _func(*args, **kwargs)))
+                result = CachedAwaitable(_func(*args, **kwargs))
                 _cache.set(key, result, _timeout)
-            return cast(R_A, result)
+            return result
 
         data = _cache.get(key, sentinel)
         if data is not sentinel:
-            return cast(R_A, data)
+            return data
         if _lock:
             event = EventData(Event(), None)
             ve = _events.setdefault(key, event)
@@ -212,11 +221,11 @@ def Wrapper(
         else:
             result = _func(*args, **kwargs)
             _cache.set(key, result, _timeout)
-        return cast(R_A, result)
+        return result
 
-    fetch._cache = _cache  # type: ignore
-    fetch.key = key  # type: ignore
-    return fetch  # type: ignore
+    fetch._cache = _cache
+    fetch.key = key
+    return fetch
 
 
 class Memoize:
@@ -247,9 +256,9 @@ class Memoize:
         self.typed = typed
         self.lock = lock
 
-    def __call__(self, fn: Callable[P, R_A]) -> '_Wrapped[P, R_A, [VarArg(Any), KwArg(Any)], R_A]':
+    def __call__(self, fn: Callable[Concatenate[S, P], R]) -> Cached[S, P, R]:
         wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, self.lock)
-        return update_wrapper(wrapper, fn)
+        return cast(Cached[S, P, R], update_wrapper(wrapper, fn))
 
 
 class Cache:
