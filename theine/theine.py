@@ -20,7 +20,6 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    Self,
     overload,
     Concatenate,
     no_type_check,
