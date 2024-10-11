@@ -21,12 +21,11 @@ from typing import (
     Union,
     cast,
     overload,
-    Concatenate,
     no_type_check,
 )
 
 from theine_core import ClockProCore, LruCore, TlfuCore
-from typing_extensions import ParamSpec, Protocol
+from typing_extensions import ParamSpec, Protocol, Concatenate
 
 from theine.exceptions import InvalidTTL
 from theine.models import CacheStats
