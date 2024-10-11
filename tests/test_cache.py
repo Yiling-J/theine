@@ -1,19 +1,21 @@
 from datetime import timedelta
 from random import randint
 from time import sleep
-from bounded_zipf import Zipf
+from typing import cast
 
 import pytest
+from bounded_zipf import Zipf  # type: ignore[import]
+from pytest_asyncio.plugin import SubRequest
 
 from theine.theine import Cache, sentinel
 
 
 @pytest.fixture(params=["lru", "tlfu", "clockpro"])
-def policy(request):
-    return request.param
+def policy(request: SubRequest) -> str:
+    return cast(str, request.param)
 
 
-def test_set(policy):
+def test_set(policy: str) -> None:
     cache = Cache(policy, 100)
     for i in range(20):
         key = f"key:{i}"
@@ -36,7 +38,7 @@ def test_set(policy):
     assert len(cache) == 100
 
 
-def test_set_cache_size(policy):
+def test_set_cache_size(policy: str) -> None:
     cache = Cache(policy, 500)
     for _ in range(100000):
         i = randint(0, 100000)
@@ -44,7 +46,7 @@ def test_set_cache_size(policy):
     assert len([i for i in cache._cache if i is not sentinel]) == 500
 
 
-def test_set_with_ttl(policy):
+def test_set_with_ttl(policy: str) -> None:
     cache = Cache(policy, 500)
     for i in range(30):
         key = f"key:{i}"
@@ -67,7 +69,7 @@ def test_set_with_ttl(policy):
         assert f"key:{i}:2" in data
 
 
-def test_delete(policy):
+def test_delete(policy: str) -> None:
     cache = Cache(policy, 100)
     for i in range(20):
         key = f"key:{i}"
@@ -79,11 +81,11 @@ def test_delete(policy):
 
 
 class Foo:
-    def __init__(self, id):
+    def __init__(self, id: int):
         self.id = id
 
 
-def test_hashable_key(policy):
+def test_hashable_key(policy: str) -> None:
     cache = Cache(policy, 100)
     foos = [Foo(i) for i in range(20)]
     for foo in foos:
@@ -98,7 +100,7 @@ def test_hashable_key(policy):
     assert cache.key_gen.len() == 19
 
 
-def test_set_with_ttl_hashable(policy):
+def test_set_with_ttl_hashable(policy: str) -> None:
     cache = Cache(policy, 500)
     foos = [Foo(i) for i in range(30)]
     for i in range(30):
@@ -117,7 +119,7 @@ def test_set_with_ttl_hashable(policy):
     assert cache.key_gen.len() == 0
 
 
-def test_ttl_high_workload(policy):
+def test_ttl_high_workload(policy: str) -> None:
     cache = Cache(policy, 500000)
     for i in range(500000):
         cache.set((i, 2), i, timedelta(seconds=randint(5, 10)))
@@ -132,7 +134,7 @@ def test_ttl_high_workload(policy):
     assert len(cache.key_gen.hk) == 0
 
 
-def test_close_cache(policy):
+def test_close_cache(policy: str) -> None:
     for _ in range(10):
         cache = Cache(policy, 500)
         cache.set("foo", "bar", timedelta(seconds=60))
@@ -140,7 +142,7 @@ def test_close_cache(policy):
         assert cache._maintainer.is_alive() is False
 
 
-def test_cache_stats(policy):
+def test_cache_stats(policy: str) -> None:
     cache = Cache(policy, 5000)
     assert cache.max_size == 5000
     assert len(cache) == 0

@@ -1,26 +1,31 @@
 from datetime import timedelta
 from threading import Lock
-from typing import Optional, cast
+from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union, cast
 
-from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
+from django.core.cache.backends.base import BaseCache, DEFAULT_TIMEOUT
 
 from theine import Cache as Theine
 from theine.theine import sentinel
 
+KEY_TYPE = Union[str, Callable[..., str]]
+VALUE_TYPE = Any
+VERSION_TYPE = Optional[int]
+
 
 class Cache(BaseCache):
-    def __init__(self, name, params):
+    def __init__(self, name: str, params: Dict[str, Any]):
         super().__init__(params)
         options = params.get("OPTIONS", {})
         policy = options.get("POLICY", "tlfu")
         self.cache = Theine(policy, self._max_entries)
 
-    def _timeout_seconds(self, timeout) -> Optional[float]:
+    def _timeout_seconds(self, timeout: 'Optional[Union[float, DEFAULT_TIMEOUT]]') -> float:
         if timeout == DEFAULT_TIMEOUT:
-            return self.default_timeout
-        return timeout
+            return cast(float, self.default_timeout)
+        return cast(float, timeout)
 
-    def add(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):
+    def add(self, key: KEY_TYPE, value: VALUE_TYPE, timeout: Optional[float] = DEFAULT_TIMEOUT,
+            version: VERSION_TYPE = None) -> bool:
         data = self.get(key, sentinel, version)
         if data is not sentinel:
             return False
@@ -28,17 +33,17 @@ class Cache(BaseCache):
         self.cache.set(
             key,
             value,
-            timedelta(seconds=cast(float, timeout))
-            if timeout is not DEFAULT_TIMEOUT
-            else None,
+            timedelta(seconds=cast(float, timeout)) if timeout is not DEFAULT_TIMEOUT else None,
         )
         return True
 
-    def get(self, key, default=None, version=None):
+    def get(self, key: KEY_TYPE, default: Optional[VALUE_TYPE] = None, version: VERSION_TYPE = None) -> Optional[
+        VALUE_TYPE]:
         key = self.make_key(key, version)
         return self.cache.get(key, default)
 
-    def set(self, key, value, timeout=DEFAULT_TIMEOUT, version=None):
+    def set(self, key: KEY_TYPE, value: VALUE_TYPE, timeout: Optional[float] = DEFAULT_TIMEOUT,
+            version: VERSION_TYPE = None) -> None:
         to = self._timeout_seconds(timeout)
         if to is not None and to <= 0:
             self.delete(key)
@@ -50,7 +55,7 @@ class Cache(BaseCache):
             timedelta(seconds=to) if to is not None else None,
         )
 
-    def touch(self, key, timeout=DEFAULT_TIMEOUT, version=None):
+    def touch(self, key: KEY_TYPE, timeout: Optional[float] = DEFAULT_TIMEOUT, version: VERSION_TYPE = None) -> bool:
         data = self.get(key, sentinel, version)
         if data is sentinel:
             return False
@@ -58,7 +63,7 @@ class Cache(BaseCache):
         if (
             timeout is not DEFAULT_TIMEOUT
             and timeout is not None
-            and cast(float, timeout) <= 0
+            and timeout <= 0
         ):
             self.cache.delete(nkey)
             return True
@@ -67,9 +72,9 @@ class Cache(BaseCache):
             self.cache._access(nkey, timedelta(seconds=to) if to is not None else None)
         return True
 
-    def delete(self, key, version=None):
+    def delete(self, key: KEY_TYPE, version: VERSION_TYPE = None) -> bool:
         key = self.make_key(key, version)
         return self.cache.delete(key)
 
-    def clear(self):
+    def clear(self) -> None:
         self.cache.clear()

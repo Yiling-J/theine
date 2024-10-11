@@ -12,7 +12,7 @@ classifiers = [
 license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = ">=3.8,<4.0"
 typing-extensions = "^4.4.0"
 theine-core = "^0.4.3"
 
@@ -20,7 +20,7 @@ theine-core = "^0.4.3"
 pytest = "^7.2.1"
 pytest-benchmark = "^4.0.0"
 typing-extensions = "^4.4.0"
-mypy = "^1.0.0"
+mypy = "1.11.1"
 django = "^3.2"
 pytest-django = "^4.5.2"
 pytest-asyncio = "^0.20.3"
@@ -30,6 +30,19 @@ isort = "^5.5.0"
 py-spy = "^0.3.14"
 cacheout = "^0.14.1"
 bounded-zipf = "^1.0.0"
+django-stubs = "^5.0.2"
+
+[tool.mypy]
+strict = true
+plugins = ["mypy_django_plugin.main", ]
+exclude = [
+    "benchmarks",
+    "tests"
+]
+
+[tool.django-stubs]
+django_settings_module = 'theine'
+strict_settings = false
 
 [build-system]
 requires = ["poetry-core"]
