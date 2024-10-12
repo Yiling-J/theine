@@ -24,6 +24,7 @@ from typing import (
     no_type_check,
 )
 
+from mypy_extensions import KwArg, VarArg
 from theine_core import ClockProCore, LruCore, TlfuCore
 from typing_extensions import ParamSpec, Protocol, Concatenate
 
@@ -191,6 +192,7 @@ def Wrapper(
         _auto_key = False
 
     def fetch(*args, **kwargs):
+
         if _auto_key:
             key = _make_key(args, kwargs, _typed)
         else:
@@ -199,7 +201,7 @@ def Wrapper(
         if inspect.iscoroutinefunction(fn):
             result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = CachedAwaitable(_func(*args, **kwargs))
+                result = CachedAwaitable(cast(Awaitable[Any], _func(*args, **kwargs)))
                 _cache.set(key, result, _timeout)
             return result
 
