@@ -15,7 +15,6 @@ license = "BSD-3-Clause"
 python = "^3.9"
 typing-extensions = "^4.4.0"
 theine-core = {path = "../theine-core", develop = false}
-django = "4.2"
 mypy-extensions = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]

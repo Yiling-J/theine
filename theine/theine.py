@@ -23,15 +23,16 @@ from typing import (
     cast,
     overload,
     no_type_check,
+    Generic,
 )
 
 from mypy_extensions import KwArg, VarArg
-from theine_core import ClockProCore, LruCore, TlfuCore
+from theine_core import TlfuCore, spread
 from typing_extensions import ParamSpec, Protocol, Concatenate
 
 
 from theine.exceptions import InvalidTTL
-from theine.models import CacheStats, Entry
+from theine.models import CacheStats, Entry, KT, VT
 from theine.striped_buffer import StripedBuffer
 from theine.write_buffer import WriteBuffer
 from theine.utils import round_up_power_of_2
@@ -46,11 +47,10 @@ if TYPE_CHECKING:
 
 sentinel = object()
 
-
 _maintainer_loop = asyncio.new_event_loop()
 
 
-def _maintance():
+def _maintance() -> None:
     asyncio.set_event_loop(_maintainer_loop)
     _maintainer_loop.run_forever()
 
@@ -96,7 +96,7 @@ class Key:
 
 
 class Cached(Protocol[S, P, R]):
-    _cache: "Cache"
+    _cache: "Cache[Hashable, Any]"
 
     @overload
     def key(self, fn: Callable[P, Hashable]) -> None: ...
@@ -196,7 +196,7 @@ class Memoize:
         typed: bool = False,
         lock: bool = False,
     ):
-        self.cache = Cache(size)
+        self.cache = Cache[Hashable, Any](size)
         self.timeout = timeout
         self.typed = typed
         self.lock = lock
@@ -206,38 +206,41 @@ class Memoize:
         return cast(Cached[S, P, R], update_wrapper(wrapper, fn))
 
 
-class Shard:
+class Shard(Generic[KT, VT]):
 
     def __init__(self) -> None:
-        self._map: Dict[Any, Entry] = {}
+        self._map: Dict[KT, Entry[VT]] = {}
         # key map is used to find evicted entries in _map because policy returns hashed key value
-        self._key_map: Dict[int, Any] = {}
+        self._key_map: Dict[int, KT] = {}
         self._mutex: Lock = Lock()
         self._hits = itertools.count()
         self._misses = itertools.count()
 
-    def get(self, key: Hashable, key_hash: int, default: Any = None) -> Any:
+    def get(self, key: KT, key_hash: int) -> Tuple[Optional[VT], bool]:
         try:
             entry = self._map[key]
-            if  entry.expire > 0 and entry.expire <= time.monotonic_ns():
+            if entry.expire > 0 and entry.expire <= time.monotonic_ns():
                 next(self._misses)
                 with self._mutex:
                     self._map.pop(key, sentinel)
                     self._key_map.pop(key_hash, sentinel)
-                    return default
+                    return (None, False)
             else:
                 next(self._hits)
-                return entry.value
+                return (entry.value, True)
         except KeyError:
             next(self._misses)
-            return default
+            return (None, False)
 
-    def set(self, key: Hashable, key_hash: int, value: Any, ttl: int) -> bool:
+    def set(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
         with self._mutex:
             # remove exist first if key hash collision
             # not policy update because same hash means same key in policy
-            removed = self._key_map.pop(key_hash, sentinel)
-            if removed != sentinel:
+            try:
+                removed = self._key_map.pop(key_hash)
+            except KeyError:
+                pass
+            else:
                 self._map.pop(removed)
 
             expire = 0
@@ -247,10 +250,13 @@ class Shard:
             self._key_map[key_hash] = key
             return True
 
-    def set_ttl(self, key: Hashable, ttl: int):
+    def set_ttl(self, key: KT, ttl: int) -> None:
         with self._mutex:
-            entry = self._map.get(key, sentinel)
-            if entry != sentinel:
+            try:
+                entry = self._map[key]
+            except KeyError:
+                return
+            else:
                 expire = 0
                 if ttl > 0:
                     expire = time.monotonic_ns() + ttl
@@ -258,25 +264,38 @@ class Shard:
 
     def remove(self, key_hash: int) -> bool:
         with self._mutex:
-            key = self._key_map.pop(key_hash, sentinel)
-            if key != sentinel:
-                self._map.pop(key)
-            return key != sentinel
+            try:
+                key = self._key_map.pop(key_hash)
+            except KeyError:
+                return False
+            else:
+                try:
+                    self._map.pop(key)
+                except KeyError:
+                    return False
+                else:
+                    return True
 
     # check expire before remove, used in timer wheel expire only,
     # set(key, ttl1) -> ttl1_sync_to_policy -> set(key, ttl2) -> ttl1 expired -> key_removed -> ttl2_sync_to_policy
     # the key is already removed when policy aware ttl changed, make ttl2 no effect
-    def remove_expired(self, key_hash: int):
+    def remove_expired(self, key_hash: int) -> None:
         with self._mutex:
-            key = self._key_map.get(key_hash, sentinel)
-            if key != sentinel:
-                entry = self._map.get(key)
-                # expired, removed
-                if entry.expire <= time.monotonic_ns():
+            try:
+                key = self._key_map[key_hash]
+            except KeyError:
+                pass
+            else:
+                try:
+                    entry = self._map[key]
+                except KeyError:
+                    pass
+                else:
+                    # expired, removed
                     self._key_map.pop(key_hash, sentinel)
                     self._map.pop(key, sentinel)
 
-    def clear(self):
+    def clear(self) -> None:
         with self._mutex:
             self._map.clear()
             self._key_map.clear()
@@ -286,7 +305,7 @@ class Shard:
             return len(self._map)
 
 
-class Cache:
+class Cache(Generic[KT, VT]):
     """
     Create new Theine cache store and use API with this class. This class is not thread-safe.
 
@@ -295,14 +314,16 @@ class Cache:
     """
 
     def __init__(self, size: int):
-        shard_count = round_up_power_of_2(os.cpu_count())
+        shard_count = round_up_power_of_2(os.cpu_count() or 4)
 
         if shard_count < 16:
             shard_count = 16
         elif shard_count > 128:
             shard_count = 128
 
-        self._shards: Tuple[Shard] = tuple([Shard() for _ in range(shard_count)])
+        self._shards: Tuple[Shard[KT, VT], ...] = tuple(
+            [Shard() for _ in range(shard_count)]
+        )
         self.core = TlfuCore(size)
         self._closed = False
         self._total = 0
@@ -324,7 +345,7 @@ class Cache:
             total += len(shard)
         return total
 
-    def get(self, key: Hashable, default: Any = None) -> Any:
+    def get(self, key: KT) -> Tuple[Optional[VT], bool]:
         """
         Retrieve data with cache key. If given key is not in cache, return default value.
 
@@ -332,15 +353,15 @@ class Cache:
         :param default: returned value if key is not found in cache, default None.
         """
         kh = spread(hash(key))
-        v = self._shards[kh & (self._shard_count - 1)].get(key, kh, default)
+        (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
         self._read_buffer.add(kh)
-        return v
+        return (v, ok)
 
-    def _drain_read(self, keys: List[int]):
+    def _drain_read(self, keys: List[int]) -> None:
         with self._core_mutex:
             self.core.access(keys)
 
-    def _drain_write(self, entries: List[Tuple[int, int]]):
+    def _drain_write(self, entries: List[Tuple[int, int]]) -> None:
         with self._core_mutex:
             evicted = self.core.set(entries)
 
@@ -349,7 +370,7 @@ class Cache:
             self._shards[key & (self._shard_count - 1)].remove(key)
 
     # send writer buffer to policy immediately, used in test and clear
-    def _force_drain_write(self):
+    def _force_drain_write(self) -> None:
         with self._core_mutex:
             evicted = self.core.set(self._write_buffer.buffer)
             self._write_buffer.buffer = self._write_buffer.buffer[:0]
@@ -358,7 +379,7 @@ class Cache:
             self._shards[key & (self._shard_count - 1)].remove(key)
 
     # used in Django adapter touch method, sets a new expiration for a key
-    def _access(self, key: Hashable, ttl: Optional[timedelta] = None) -> None:
+    def _access(self, key: KT, ttl: Optional[timedelta] = None) -> None:
         kh = spread(hash(key))
         ttl_ns = 0
         if ttl is not None:
@@ -369,9 +390,7 @@ class Cache:
         self._shards[kh & (self._shard_count - 1)].set_ttl(key, ttl_ns)
         self._write_buffer.add(kh, ttl_ns)
 
-    def set(
-        self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
-    ) -> Optional[str]:
+    def set(self, key: KT, value: VT, ttl: Optional[timedelta] = None) -> None:
         """
         Add new data to cache. If the key already exists, value will be overwritten.
 
@@ -390,9 +409,8 @@ class Cache:
 
         self._shards[kh & (self._shard_count - 1)].set(key, kh, value, ttl_ns)
         self._write_buffer.add(kh, ttl_ns)
-        return None
 
-    def delete(self, key: Hashable) -> bool:
+    def delete(self, key: KT) -> bool:
         """
         Remove key from cache. Return True if given key exists in cache and been deleted.
 
