@@ -1,6 +1,9 @@
+import threading
+import time
 from datetime import timedelta
 from random import randint
 from time import sleep
+
 
 from bounded_zipf import Zipf  # type: ignore[import]
 
@@ -209,3 +212,23 @@ def test_cache_stats() -> None:
     assert stats.hit_rate > 0.5
     assert stats.hit_rate < 1
     assert stats.hit_rate == stats.hit_count / stats.request_count
+
+
+def thread_function(data):
+    data.append(1)
+    time.sleep(1)
+
+
+def test_simple_threading():
+    threads = []
+    data = []
+    # Create 10 threads
+    for i in range(10):
+        thread = threading.Thread(target=thread_function, args=(data,))
+        threads.append(thread)
+        thread.start()
+
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+    print(data)

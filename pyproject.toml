@@ -12,9 +12,11 @@ classifiers = [
 license = "BSD-3-Clause"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<4.0"
+python = "^3.9"
 typing-extensions = "^4.4.0"
-theine-core = "^0.4.3"
+theine-core = {path = "../theine-core", develop = false}
+django = "4.2"
+mypy-extensions = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -30,6 +32,7 @@ isort = "^5.5.0"
 py-spy = "^0.3.14"
 cacheout = "^0.14.1"
 bounded-zipf = "^1.0.0"
+matplotlib = "^3.9.2"
 django-stubs = "^5.0.2"
 
 [tool.mypy]

@@ -302,7 +302,7 @@ class Cache:
         elif shard_count > 128:
             shard_count = 128
 
-        self._shards: List[Shard] = [Shard() for _ in range(shard_count)]
+        self._shards: Tuple[Shard] = tuple([Shard() for _ in range(shard_count)])
         self.core = TlfuCore(size)
         self._closed = False
         self._total = 0
