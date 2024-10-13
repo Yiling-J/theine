@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 from theine import Memoize, Cache
 
 
-@Memoize(Cache("tlfu", 1000), None)
+@Memoize(1000, None)
 def foo(id: int) -> Dict[str, int]:
     return {"id": id}
 
@@ -14,7 +14,7 @@ def _(id: int) -> str:
 
 class Bar:
 
-    @Memoize(Cache("tlfu", 1000), None)
+    @Memoize(1000, None)
     def foo(self, id: int) -> Dict[str, int]:
         return {"id": id}
 

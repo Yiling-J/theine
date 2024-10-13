@@ -41,7 +41,6 @@ import itertools
 
 S = TypeVar("S", contravariant=True)
 P = ParamSpec("P")
-R = TypeVar("R", covariant=True, bound=Any)
 if TYPE_CHECKING:
     from functools import _Wrapped
 
@@ -95,8 +94,8 @@ class Key:
         self.event = Event()
 
 
-class Cached(Protocol[S, P, R]):
-    _cache: "Cache[Hashable, Any]"
+class Cached(Protocol[S, P, VT]):
+    _cache: "Cache[Hashable, VT]"
 
     @overload
     def key(self, fn: Callable[P, Hashable]) -> None: ...
@@ -105,10 +104,10 @@ class Cached(Protocol[S, P, R]):
     def key(self, fn: Callable[Concatenate[S, P], Hashable]) -> None: ...
 
     @overload
-    def __call__(self, _arg_first: S, *args: P.args, **kwargs: P.kwargs) -> R: ...
+    def __call__(self, _arg_first: S, *args: P.args, **kwargs: P.kwargs) -> VT: ...
 
     @overload
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> VT: ...
 
 
 @no_type_check
@@ -171,9 +170,9 @@ class Memoize:
         self.timeout = timeout
         self.typed = typed
 
-    def __call__(self, fn: Callable[Concatenate[S, P], R]) -> Cached[S, P, R]:
+    def __call__(self, fn: Callable[Concatenate[S, P], VT]) -> Cached[S, P, VT]:
         wrapper = Wrapper(fn, self.timeout, self.cache, self.typed)
-        return cast(Cached[S, P, R], update_wrapper(wrapper, fn))
+        return cast(Cached[S, P, VT], update_wrapper(wrapper, fn))
 
 
 class Shard(Generic[KT, VT]):
