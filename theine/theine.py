@@ -117,7 +117,6 @@ def Wrapper(
     timeout: Optional[timedelta],
     cache: "Cache",
     typed: bool,
-    lock: bool,
 ):
     _key_func = None
     _events = {}
@@ -126,7 +125,6 @@ def Wrapper(
     _timeout = timeout
     _typed = typed
     _auto_key = True
-    _lock = lock
 
     def key(fn) -> None:
         nonlocal _key_func
@@ -141,34 +139,10 @@ def Wrapper(
         else:
             key = _key_func(*args, **kwargs)
 
-        if inspect.iscoroutinefunction(fn):
-            result = _cache.get(key, sentinel)
-            if result is sentinel:
-                result = CachedAwaitable(cast(Awaitable[Any], _func(*args, **kwargs)))
-                _cache.set(key, result, _timeout)
-            return result
-
-        data = _cache.get(key, sentinel)
-        if data is not sentinel:
-            return data
-        if _lock:
-            event = EventData(Event(), None)
-            ve = _events.setdefault(key, event)
-            if ve is event:
-                result = _func(*args, **kwargs)
-                event.data = result
-                _events.pop(key, None)
-                _cache.set(key, result, _timeout)
-                event.event.set()
-            else:
-                ve.event.wait()
-                result = ve.data
-        else:
-            result = _func(*args, **kwargs)
-            _cache.set(key, result, _timeout)
-        return result
+        return _cache._get_or_compute(key, lambda: fn(*args, **kwargs))
 
     fetch._cache = _cache
+    _cache.with_loader(fn, timeout)
     fetch.key = key
     return fetch
 
@@ -185,8 +159,6 @@ class Memoize:
         function arguments of different types will be cached separately.
         If typed is false, the implementation will usually regard them as equivalent calls and only cache
         a single result. (Some types such as str and int may be cached separately even when typed is false.)
-    :param lock: Cocurrent requests to same data will only fetch from source once. Default is False and
-        only make sense if you are using multitheads and want to avoid thundering herd problem.
     """
 
     def __init__(
@@ -194,15 +166,13 @@ class Memoize:
         size: int,
         timeout: Optional[timedelta],
         typed: bool = False,
-        lock: bool = False,
     ):
         self.cache = Cache[Hashable, Any](size)
         self.timeout = timeout
         self.typed = typed
-        self.lock = lock
 
     def __call__(self, fn: Callable[Concatenate[S, P], R]) -> Cached[S, P, R]:
-        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, self.lock)
+        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed)
         return cast(Cached[S, P, R], update_wrapper(wrapper, fn))
 
 
@@ -231,6 +201,23 @@ class Shard(Generic[KT, VT]):
         except KeyError:
             next(self._misses)
             return (None, False)
+
+    def _set_nolock(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
+        # remove exist first if key hash collision
+        # not policy update because same hash means same key in policy
+        try:
+            removed = self._key_map.pop(key_hash)
+        except KeyError:
+            pass
+        else:
+            self._map.pop(removed)
+
+        expire = 0
+        if ttl > 0:
+            expire = time.monotonic_ns() + ttl
+        self._map[key] = Entry(value, expire)
+        self._key_map[key_hash] = key
+        return True
 
     def set(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
         with self._mutex:
@@ -313,6 +300,10 @@ class Cache(Generic[KT, VT]):
     :param size: cache size.
     """
 
+    _loader: Optional[Callable[[KT], VT]]
+
+    _timeout: Optional[timedelta]
+
     def __init__(self, size: int):
         shard_count = round_up_power_of_2(os.cpu_count() or 4)
 
@@ -338,12 +329,17 @@ class Cache(Generic[KT, VT]):
         self._maintainer = asyncio.run_coroutine_threadsafe(
             self.maintenance(), loop=_maintainer_loop
         )
+        self._events: Dict[KT, EventData] = {}
 
     def __len__(self) -> int:
         total = 0
         for shard in self._shards:
             total += len(shard)
         return total
+
+    def with_loader(self, loader: Callable[[KT], VT], ttl: Optional[timedelta]) -> None:
+        self._loader = loader
+        self._timeout = ttl
 
     def get(self, key: KT) -> Tuple[Optional[VT], bool]:
         """
@@ -356,6 +352,55 @@ class Cache(Generic[KT, VT]):
         (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
         self._read_buffer.add(kh)
         return (v, ok)
+
+    def _ttl_nano(self, ttl: Optional[timedelta]) -> int:
+        ttl_ns = 0
+        if ttl is not None:
+            seconds = ttl.total_seconds()
+            if seconds == 0:
+                raise Exception("ttl must be positive")
+            ttl_ns = int(seconds * 1e9)
+        return ttl_ns
+
+    def _get_or_compute(self, key: KT, fn: Callable[[], VT]) -> VT:
+        kh = spread(hash(key))
+        (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
+        self._read_buffer.add(kh)
+        if ok:
+            return cast(VT, v)
+
+        if inspect.iscoroutinefunction(fn):
+            result = CachedAwaitable(cast(Awaitable[Any], fn()))
+            self.set(key, cast(VT, result), self._timeout)
+            return cast(VT, result)
+
+        shard = self._shards[kh & (self._shard_count - 1)]
+        event = EventData(Event(), None)
+        ve = self._events.setdefault(key, event)
+        if ve is event:
+            # lock the shard, so concatenate write is not allowed
+            with shard._mutex:
+                result_sync = fn()
+                event.data = result_sync
+                self._events.pop(key, None)
+                ttl_ns = self._ttl_nano(self._timeout)
+                shard._set_nolock(key, kh, result_sync, ttl_ns)
+            event.event.set()
+        else:
+            ve.event.wait()
+            result_sync = cast(VT, ve.data)
+        return result_sync
+
+    def _get_loading(self, key: KT) -> Tuple[Optional[VT], bool]:
+        if self._loader is None:
+            raise Exception("loader function is None")
+
+        return (
+            self._get_or_compute(
+                key, cast(Callable[[], VT], lambda: self._loader(key))
+            ),
+            True,
+        )
 
     def _drain_read(self, keys: List[int]) -> None:
         with self._core_mutex:
@@ -381,12 +426,7 @@ class Cache(Generic[KT, VT]):
     # used in Django adapter touch method, sets a new expiration for a key
     def _access(self, key: KT, ttl: Optional[timedelta] = None) -> None:
         kh = spread(hash(key))
-        ttl_ns = 0
-        if ttl is not None:
-            seconds = ttl.total_seconds()
-            if seconds == 0:
-                raise Exception("ttl must be positive")
-            ttl_ns = int(seconds * 1e9)
+        ttl_ns = self._ttl_nano(ttl)
         self._shards[kh & (self._shard_count - 1)].set_ttl(key, ttl_ns)
         self._write_buffer.add(kh, ttl_ns)
 
@@ -400,12 +440,7 @@ class Cache(Generic[KT, VT]):
         """
         kh = spread(hash(key))
 
-        ttl_ns = 0
-        if ttl is not None:
-            seconds = ttl.total_seconds()
-            if seconds <= 0:
-                raise InvalidTTL("ttl must be positive")
-            ttl_ns = int(seconds * 1e9)
+        ttl_ns = self._ttl_nano(ttl)
 
         self._shards[kh & (self._shard_count - 1)].set(key, kh, value, ttl_ns)
         self._write_buffer.add(kh, ttl_ns)

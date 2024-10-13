@@ -103,7 +103,11 @@ def test_sync_decorator() -> None:
     assert foo.__name__ == "foo"  # type: ignore
 
     def assert_id(id: int, m: Mock):
-        assert foo(id, m)["id"] == id
+        try:
+            v = foo(id, m)
+        except Exception as e:
+            print(e)
+        assert v["id"] == id
 
     for _ in range(500):
         t = Thread(target=assert_id, args=[randint(0, 5), mock])
@@ -353,7 +357,7 @@ def test_cache_full_auto_key_sync_multi() -> None:
     assert len(foo_to_auto._cache) == 1000
 
 
-@Memoize(1000, timeout=None, lock=True)
+@Memoize(1000, timeout=None)
 def read_auto_key(key: str) -> str:
     return key
 

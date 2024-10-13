@@ -17,13 +17,17 @@ def test_set() -> None:
         cache.set(key, key)
     for i in range(20):
         key = f"key:{i}"
-        assert cache.get(key) == key
+        v, ok = cache.get(key)
+        assert ok
+        assert v == key
     for i in range(20):
         key = f"key:{i}"
         cache.set(key, key)
     for i in range(20):
         key = f"key:{i}"
-        assert cache.get(key) == key
+        v, ok = cache.get(key)
+        assert ok
+        assert v == key
     for i in range(100):
         key = f"key:{i}:v2"
         cache.set(key, key)
@@ -56,6 +60,7 @@ def test_set_with_ttl() -> None:
     assert len(cache) == 60
     current = 60
     counter = 0
+
     while True:
         sleep(5)
         counter += 1
@@ -66,7 +71,8 @@ def test_set_with_ttl() -> None:
     assert counter < 10
 
     for i in range(30):
-        assert cache.get(f"key:{i}:2", None) is not None
+        v, ok = cache.get(f"key:{i}:2")
+        assert ok
 
 
 def test_set_with_ttl_multi_instances() -> None:
@@ -107,7 +113,8 @@ def test_collision() -> None:
     cache._force_drain_write()
     assert len(cache) == 1
     assert (cache.core.len()) == 1
-    obj = cache.get(SameHash(29))
+    obj, ok = cache.get(SameHash(29))
+    assert ok
     assert obj.i == 29
 
 
@@ -134,11 +141,11 @@ def test_hashable_key() -> None:
     for foo in foos:
         cache.set(foo, foo)
     for foo in foos:
-        cached = cache.get(foo, None)
+        cached, ok = cache.get(foo)
         assert cached is foo
     cache.delete(foos[3])
-    cached = cache.get(foos[3], None)
-    assert cached is None
+    cached, ok = cache.get(foos[3])
+    assert not ok
 
 
 def test_set_with_ttl_hashable() -> None:
@@ -201,8 +208,8 @@ def test_cache_stats() -> None:
     for _ in range(20000):
         i = z.get()
         key = f"key:{i}"
-        v = cache.get(key)
-        if v is None:
+        v, ok = cache.get(key)
+        if not ok:
             cache.set(key, key)
     cache._force_drain_write()
     stats = cache.stats()
