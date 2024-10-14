@@ -5,7 +5,6 @@ import time
 import random
 from datetime import timedelta
 
-
 # The multi-threading benchmark results are not meaningful for a GIL-enabled build
 # because cache Get/Set operations are CPU-intensive, and multi-threading performance
 # is heavily constrained by the GIL.
@@ -39,6 +38,7 @@ def bench_run(client, tp, reporter=None):
 
     start = random.randint(0, DATA_LEN - 1)
     s = time.monotonic_ns()
+
     for i in range(500000):
         if tp == 0:
             client.get(keys[(i + start) & DATA_LEN - 1])
@@ -47,8 +47,8 @@ def bench_run(client, tp, reporter=None):
 
     dt = time.monotonic_ns() - s
     if reporter is None:
-        ops = 500000 / (dt / 1e9)
-        print(f"single thread {'read' if tp==0 else 'write'}: {ops:.2f} ops/s")
+        nop = dt / 500000
+        print(f"single thread {'read' if tp==0 else 'write'}: {nop:.2f} ns/op")
     else:
         reporter(500000)
 
@@ -75,8 +75,8 @@ def bench_run_parallel(r, w, runner):
         t.join()
     dt = time.monotonic_ns() - s
 
-    ops = count_sum / (dt / 1e9)
-    print(f"read-{r} write-{w}: {ops:.2f} ops/s")
+    nop = dt / count_sum
+    print(f"read-{r} write-{w}: {nop:.2f} ns/op")
 
 
 if __name__ == "__main__":
@@ -84,10 +84,10 @@ if __name__ == "__main__":
     keys = key_gen()
     for k in keys:
         client.set(k, 1, timedelta(hours=1))
-    print("cache len", len(client))
 
     # read only single thread
     bench_run(client, 0)
+
     # write only single thread
     bench_run(client, 1)
 
