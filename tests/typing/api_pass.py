@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from theine import Memoize, Cache
 
 
@@ -27,3 +27,9 @@ def run() -> None:
     v: Dict[str, int] = foo(12)
     bar = Bar()
     b: Dict[str, int] = bar.foo(13)
+
+    client = Cache[int, int](1000)
+    client.set(1, 1)
+    v2, ok = client.get(1)
+    vt: Optional[int] = v2
+    okk: bool = ok
