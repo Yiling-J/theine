@@ -4,13 +4,13 @@ High performance in-memory cache inspired by [Caffeine](https://github.com/ben-m
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
 - High hit ratio with [W-TinyLFU](https://arxiv.org/pdf/1512.00727.pdf) or [Clock-Pro](https://static.usenix.org/event/usenix05/tech/general/full_papers/jiang/jiang_html/html.html) eviction policy
 - Expired data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
-
-  > TTL must be considered in in-memory caching because
-it limits the effective (unexpired) working set size. Efficiently removing expired objects from cache needs to be
-prioritized over cache eviction. - [A large scale analysis of hundreds of in-memory
-cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
-- Simple API
+- Fully typed
 - Django cache backend
+
+# **Theine V2 Migration Guide**
+
+Theine V2 is a major refactor and rewrite of V1, with a focus on thread safety and scalability, leveraging the free-threading capabilities introduced in Python 3.13. While there are also several internal improvements, the most significant changes for V1 users are the updates to the API.
+
 
 ## Table of Contents
 

@@ -1,0 +1,2 @@
+class InvalidTTL(Exception):
+    pass
