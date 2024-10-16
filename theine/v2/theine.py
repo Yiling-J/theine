@@ -27,15 +27,15 @@ from typing import (
 )
 
 from mypy_extensions import KwArg, VarArg
-from theine_core import TlfuCore, spread
+from theine_core.v2 import TlfuCore, spread
 from typing_extensions import ParamSpec, Protocol, Concatenate
 
 
-from theine.exceptions import InvalidTTL
-from theine.models import CacheStats, Entry, KT, VT
-from theine.striped_buffer import StripedBuffer
-from theine.write_buffer import WriteBuffer
-from theine.utils import round_up_power_of_2
+from theine.v2.exceptions import InvalidTTL
+from theine.v2.models import CacheStats, Entry, KT, VT
+from theine.v2.striped_buffer import StripedBuffer
+from theine.v2.write_buffer import WriteBuffer
+from theine.v2.utils import round_up_power_of_2
 import itertools
 
 

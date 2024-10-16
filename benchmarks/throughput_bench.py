@@ -1,5 +1,5 @@
 from threading import Thread, Lock
-from theine import Cache
+from theine.v2 import Cache
 from bounded_zipf import Zipf
 import time
 import random

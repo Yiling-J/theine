@@ -7,7 +7,7 @@ from time import sleep
 
 from bounded_zipf import Zipf  # type: ignore[import]
 
-from theine.theine import Cache
+from theine.theine.v2 import Cache
 
 
 def test_set() -> None:

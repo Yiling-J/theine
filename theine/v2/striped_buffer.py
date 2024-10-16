@@ -1,7 +1,7 @@
 from threading import Lock
 from typing import List, Callable
 from random import getrandbits
-from theine.utils import round_up_power_of_2
+from theine.v2.utils import round_up_power_of_2
 import os
 
 
