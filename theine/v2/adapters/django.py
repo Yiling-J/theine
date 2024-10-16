@@ -4,8 +4,8 @@ from typing import Any, Callable, Dict, Optional, Union, cast
 
 from django.core.cache.backends.base import BaseCache, DEFAULT_TIMEOUT
 
-from theine import Cache as Theine
-from theine.theine import sentinel
+from theine.v2 import Cache as Theine
+from theine.v2.theine import sentinel
 
 KEY_TYPE = Union[str, Callable[..., str]]
 VALUE_TYPE = Any
@@ -15,7 +15,7 @@ VERSION_TYPE = Optional[int]
 class Cache(BaseCache):
     def __init__(self, name: str, params: Dict[str, Any]):
         super().__init__(params)
-        self.cache = Theine(self._max_entries)
+        self.cache = Theine[Any, Any](self._max_entries)
 
     def _timeout_seconds(
         self, timeout: "Optional[Union[float, DEFAULT_TIMEOUT]]"
@@ -53,7 +53,10 @@ class Cache(BaseCache):
         version: VERSION_TYPE = None,
     ) -> Optional[VALUE_TYPE]:
         key = self.make_key(key, version)
-        return self.cache.get(key, default)
+        v, ok = self.cache.get(key)
+        if not ok:
+            return default
+        return v
 
     def set(
         self,

@@ -8,16 +8,16 @@ import os
 # a striped lossy buffer
 class StripedBuffer:
 
-    def __init__(self, clear_buffer: Callable):
-        self.buffer_count = 4 * round_up_power_of_2(os.cpu_count())
+    def __init__(self, clear_buffer: Callable[[List[int]], None]):
+        self.buffer_count = 4 * round_up_power_of_2(os.cpu_count() or 4)
         self.buffers: List[List[int]] = [[] for _ in range(self.buffer_count)]
         self.mutexes: List[Lock] = [Lock() for _ in range(self.buffer_count)]
         self.buffer_size = 16
         self.clear_buffer = clear_buffer
 
-    def add(self, hash_value: int):
+    def add(self, hash_value: int) -> None:
         index = getrandbits(32) & (self.buffer_count - 1)
-        waiting = []
+        waiting: List[int] = []
 
         # skip if acquire lock failed, lossy1
         if self.mutexes[index].acquire(blocking=False):

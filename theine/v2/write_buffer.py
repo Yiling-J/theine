@@ -9,7 +9,7 @@ class WriteBuffer:
     def __init__(self, clear_buffer: Callable[[List[Tuple[int, int]]], None]):
         # tuple: (key_hash, ttl)
         self.buffer: List[Tuple[int, int]] = []
-        self.waiting = []
+        self.waiting: List[Tuple[int, int]] = []
         self.processing = False
         self.mutex = Lock()
         self.swap_mutex = Lock()
