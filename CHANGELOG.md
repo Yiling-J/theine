@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.4.4]
+- Improve decorator typing and fix core sketch bug
+
 ## [0.4.3]
 - Add license to pyproject.toml
 
