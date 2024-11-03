@@ -1,4 +1,7 @@
 # Theine
+
+**IMPORTANT: Theine is currently undergoing a major rewrite and refactor to become a thread-safe, high-performance concurrent cache. V2 will support free-threading in Python and will focus on enhancing multi-threading performance. Some APIs will change in the update.**
+
 High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
 
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
@@ -63,7 +66,7 @@ Reference:
 https://static.usenix.org/event/usenix05/tech/general/full_papers/jiang/jiang_html/html.html
 
 
-## API
+## API (V1)
 
 Key should be a **Hashable** object, and value can be any **Python object**. If key type is not **str/int**, Theine will generate a unique key string automatically, this unique str will use extra space in memory and increase get/set/remove overhead.
 
