@@ -2,6 +2,15 @@
 
 **IMPORTANT: Theine is currently undergoing a major rewrite and refactor to become a thread-safe, high-performance concurrent cache. V2 will support free-threading in Python and will focus on enhancing multi-threading performance. Some APIs will change in the update.**
 
+Planned Updates in V2
+- **Single Policy**: V2 will feature only one caching policy, Adaptive Window-TinyLFU, so the policy option in the API will be removed.
+- **Improved Hit Ratio**: The current TinyLFU (tlfu) policy will be optimized to achieve a higher hit ratio.
+- **Unified Expiration Thread**: Instead of each cache instance using a separate thread for proactive expiration as in V1, V2 will utilize a single thread, with all cache instances scheduling expirations through asyncio.
+- **Enhanced Thread Safety and Concurrency**: Mutexes will be added to ensure thread safety, alongside advanced concurrency optimizations such as sharding to boost performance.
+- **Memory Optimization**: Memory usage per cached item will be reduced.
+
+---
+
 High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
 
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
