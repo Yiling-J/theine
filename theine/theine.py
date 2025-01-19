@@ -27,15 +27,15 @@ from typing import (
 )
 
 from mypy_extensions import KwArg, VarArg
-from theine_core.v2 import TlfuCore, spread
+from theine_core import TlfuCore, spread
 from typing_extensions import ParamSpec, Protocol, Concatenate
 
 
-from theine.v2.exceptions import InvalidTTL
-from theine.v2.models import CacheStats, Entry, KT, VT
-from theine.v2.striped_buffer import StripedBuffer
-from theine.v2.write_buffer import WriteBuffer
-from theine.v2.utils import round_up_power_of_2
+from theine.exceptions import InvalidTTL
+from theine.models import CacheStats, Entry, KT, VT
+from theine.striped_buffer import StripedBuffer
+from theine.write_buffer import WriteBuffer
+from theine.utils import round_up_power_of_2
 import itertools
 
 
@@ -116,6 +116,7 @@ def Wrapper(
     timeout: Optional[timedelta],
     cache: "Cache",
     typed: bool,
+    is_async: bool,
 ):
     _key_func = None
     _events = {}
@@ -124,6 +125,7 @@ def Wrapper(
     _timeout = timeout
     _typed = typed
     _auto_key = True
+    _is_async = is_async
 
     def key(fn) -> None:
         nonlocal _key_func
@@ -132,11 +134,17 @@ def Wrapper(
         _auto_key = False
 
     def fetch(*args, **kwargs):
-
         if _auto_key:
             key = _make_key(args, kwargs, _typed)
         else:
             key = _key_func(*args, **kwargs)
+
+        if _is_async:
+            result, ok = _cache.get(key)
+            if not ok:
+                result = CachedAwaitable(_func(*args, **kwargs))
+                _cache.set(key, result, _timeout)
+            return result
 
         return _cache._get_or_compute(key, lambda: fn(*args, **kwargs))
 
@@ -171,7 +179,7 @@ class Memoize:
         self.typed = typed
 
     def __call__(self, fn: Callable[Concatenate[S, P], VT]) -> Cached[S, P, VT]:
-        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed)
+        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, inspect.iscoroutinefunction(fn))
         return cast(Cached[S, P, VT], update_wrapper(wrapper, fn))
 
 
@@ -367,11 +375,6 @@ class Cache(Generic[KT, VT]):
         self._read_buffer.add(kh)
         if ok:
             return cast(VT, v)
-
-        if inspect.iscoroutinefunction(fn):
-            result = CachedAwaitable(cast(Awaitable[Any], fn()))
-            self.set(key, cast(VT, result), self._timeout)
-            return cast(VT, result)
 
         shard = self._shards[kh & (self._shard_count - 1)]
         event = EventData(Event(), None)

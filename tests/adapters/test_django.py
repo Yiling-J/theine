@@ -6,7 +6,7 @@ import pytest
 from django.core.cache import BaseCache
 from django.core.cache import cache as default_cache
 
-from theine.v2.adapters.django import Cache as Theine
+from theine.adapters.django import Cache as Theine
 
 
 @pytest.fixture
