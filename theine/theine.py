@@ -124,22 +124,34 @@ class EventData:
 # https://github.com/python/cpython/issues/90780
 # use event to protect from thundering herd
 class CachedAwaitable:
-    def __init__(self, awaitable: Awaitable[Any]) -> None:
+    def __init__(self, awaitable: Awaitable[Any], on_error: Callable[[BaseException], None]) -> None:
         self.awaitable = awaitable
         self.future: Optional[Awaitable[Any]] = None
         self.result = sentinel
+        self.on_error = on_error
+        self.exception: Optional[BaseException] = None
 
     def __await__(self) -> Any:
         if self.result is not sentinel:
             return self.result
+        elif self.exception:
+            raise self.exception
 
         if self.future is None:
-            self.future = asyncio.Future()
-            result = yield from self.awaitable.__await__()
-            self.result = result
-            self.future.set_result(self.result)
-            self.future = None
-            return result
+            try:
+                self.future = asyncio.Future()
+                result = yield from self.awaitable.__await__()
+                self.result = result
+                self.future.set_result(self.result)
+                self.future = None
+                return result
+            except BaseException as e:
+                self.exception = e
+                if self.future:
+                    self.future.set_exception(e)
+                self.future = None
+                self.on_error(e)
+                raise e
         else:
             yield from self.future.__await__()
         return self.result
@@ -199,7 +211,7 @@ def Wrapper(
         if inspect.iscoroutinefunction(fn):
             result = _cache.get(key, sentinel)
             if result is sentinel:
-                result = CachedAwaitable(_func(*args, **kwargs))
+                result = CachedAwaitable(_func(*args, **kwargs), lambda _: _cache.delete(key))
                 _cache.set(key, result, _timeout)
             return result
 

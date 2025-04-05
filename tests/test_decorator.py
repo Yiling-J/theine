@@ -148,6 +148,59 @@ async def test_async_decorator() -> None:
     ints = [i[0][0] for i in mock.call_args_list]
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
+@pytest.mark.asyncio
+async def test_async_decorator_with_exceptions() -> None:
+    total = 500
+    exception_count = 250
+    normal_count = total - exception_count
+    mock = Mock()
+    mock.side_effect = (
+            [Exception("Test exception") for _ in range(exception_count)] +
+            [None for _ in range(normal_count)]
+    )
+        
+    assert async_foo.__name__ == "async_foo"  # type: ignore
+
+    async def assert_id(id: int, m: Mock):
+        data = await async_foo(id, m)
+        assert data["id"] == id
+
+    results = await asyncio.gather(*[assert_id(randint(10, 15), mock) for _ in range(total)], return_exceptions=True)
+
+    assert all([isinstance(res, Exception) for res in results[:exception_count]])
+    assert mock.call_count == 6 + exception_count
+    ints = [i[0][0] for i in mock.call_args_list]
+    assert set(ints) == {10, 11, 12, 13, 14, 15}
+
+@pytest.mark.asyncio
+async def test_async_decorator_same_exception_herd() -> None:
+    total = 500
+    mock = Mock() 
+
+    def throwing_side_effect(*args, **kwargs):
+        raise Exception("Test exception")
+    
+    mock.side_effect = throwing_side_effect
+
+    coros = [async_foo(20, mock) for _ in range(total)]
+    results = await asyncio.gather(*coros, return_exceptions=True)
+
+    # should all be exceptions
+    assert all([isinstance(res, Exception) for res in results])
+    
+    # should all be the same exception
+    uniq_exceptions = set(results)
+    assert len(uniq_exceptions) == 1
+    
+    # herd should have only result in 1 call
+    assert mock.call_count == 1
+    
+    # verify if these get awaited on again for some reason same exception is raised 
+    for coro in coros:
+        with pytest.raises(Exception) as exc_info:
+            await coro
+        assert exc_info.value in uniq_exceptions
+
 
 def test_instance_method_sync() -> None:
     mock = Mock()
