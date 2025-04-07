@@ -12,6 +12,7 @@ from bounded_zipf import Zipf  # type: ignore[import]
 
 from theine import Cache, Memoize
 
+EXCEPTION_THROWING_CACHE_TTL = timedelta(seconds=3)
 
 @Memoize(Cache("tlfu", 1000), None)
 def foo(id: int, m: Mock) -> Dict[str, int]:
@@ -44,6 +45,16 @@ async def async_foo(id: int, m: Mock) -> Dict:
 @async_foo.key
 def _(id: int, m: Mock) -> str:
     return f"id-{id}"
+
+@Memoize(Cache("tlfu", 1000), timeout=EXCEPTION_THROWING_CACHE_TTL)
+async def async_foo_that_can_raise(input_val: int, m: Mock) -> Dict:
+    m(input_val)
+    await asyncio.sleep(1)
+    return {"id": input_val}
+
+@async_foo_that_can_raise.key
+def _(input_val: int, m: Mock) -> str:
+    return f"id-{input_val}"
 
 
 class Bar:
@@ -150,27 +161,39 @@ async def test_async_decorator() -> None:
 
 @pytest.mark.asyncio
 async def test_async_decorator_with_exceptions() -> None:
-    total = 500
-    exception_count = 250
-    normal_count = total - exception_count
-    mock = Mock()
-    mock.side_effect = (
-            [Exception("Test exception") for _ in range(exception_count)] +
-            [None for _ in range(normal_count)]
-    )
-        
-    assert async_foo.__name__ == "async_foo"  # type: ignore
-
+    exception_to_raise = Exception("Test exception")
+    assert async_foo_that_can_raise.__name__ == "async_foo_that_can_raise"  # type: ignore
     async def assert_id(id: int, m: Mock):
-        data = await async_foo(id, m)
+        data = await async_foo_that_can_raise(id, m)
         assert data["id"] == id
+ 
+    # verify exception is properly raised on first call
+    mock = Mock(side_effect=exception_to_raise)
+    with pytest.raises(Exception) as exc_info:
+        await async_foo_that_can_raise(1, mock)
+    assert exc_info.value == exception_to_raise 
+    assert mock.call_count == 1
 
-    results = await asyncio.gather(*[assert_id(randint(10, 15), mock) for _ in range(total)], return_exceptions=True)
+    # prior call should not be cached due to exception and this will run
+    mock = Mock(return_value=None)
+    result = await async_foo_that_can_raise(1, mock)
+    assert result["id"] == 1
+    assert mock.call_count == 1
 
-    assert all([isinstance(res, Exception) for res in results[:exception_count]])
-    assert mock.call_count == 6 + exception_count
-    ints = [i[0][0] for i in mock.call_args_list]
-    assert set(ints) == {10, 11, 12, 13, 14, 15}
+    # good value should be cached and won't hit service
+    mock = Mock(return_value=None)
+    result = await async_foo_that_can_raise(1, mock)
+    assert result["id"] == 1
+    assert mock.call_count == 0    
+
+    # sleep enough to let cache expire and verify new exceptions are raised again
+    await asyncio.sleep(EXCEPTION_THROWING_CACHE_TTL.total_seconds() + 0.1)
+    mock = Mock(side_effect=exception_to_raise)
+    with pytest.raises(Exception) as exc_info:
+        await async_foo_that_can_raise(1, mock)
+    assert exc_info.value == exception_to_raise
+    assert mock.call_count == 1
+
 
 @pytest.mark.asyncio
 async def test_async_decorator_same_exception_herd() -> None:
