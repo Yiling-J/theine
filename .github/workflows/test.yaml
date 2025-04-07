@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: "actions/checkout@v3"
@@ -32,7 +32,7 @@ jobs:
       - name: Setup Poetry
         run: "poetry config virtualenvs.in-project true"
       - name: Cache Deps
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         id: cached-poetry-dependencies
         with:
           path: .venv
