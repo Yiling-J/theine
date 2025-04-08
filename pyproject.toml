@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "theine"
-version = "0.4.4"
+version = "0.5.0"
 description = "high performance in-memory cache"
 authors = ["Yiling-J <njjyl723@gmail.com>"]
 readme = "README.md"
