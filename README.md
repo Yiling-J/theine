@@ -9,6 +9,8 @@ Planned Updates in V2
 - **Enhanced Thread Safety and Concurrency**: Mutexes will be added to ensure thread safety, alongside advanced concurrency optimizations such as sharding to boost performance.
 - **Memory Optimization**: Memory usage per cached item will be reduced.
 
+Python’s free-threading support is still evolving rapidly. And compared to Go, the Python ecosystem and tooling around free-threading remain relatively immature, with ongoing uncertainties around safety and scalability. As a result, progress may take some time. If you're interested in the current state of free-threaded Python, you can read more in this discussion: [PEP 779 – Criteria for Supported Status for Free-Threaded Python](https://discuss.python.org/t/pep-779-criteria-for-supported-status-for-free-threaded-python/84319).
+
 ---
 
 High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
