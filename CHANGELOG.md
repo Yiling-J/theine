@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.5.1]
+- Bumped theine-core from ^0.4.5 to ^0.5.0. This update drops core support for Python 3.8 and adds a prebuilt wheel for Python 3.13.
+
 ## [0.5.0]
 - Fixed an issue where exceptions thrown in decorated async functions could cause hangs: https://github.com/Yiling-J/theine/issues/34
 - The minimum supported Python version is 3.9 now because Python3.8 already reached its EOL on 2024-10-07

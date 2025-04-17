@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "theine"
-version = "0.5.0"
+version = "0.5.1"
 description = "high performance in-memory cache"
 authors = ["Yiling-J <njjyl723@gmail.com>"]
 readme = "README.md"
@@ -14,7 +14,7 @@ license = "BSD-3-Clause"
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
 typing-extensions = "^4.4.0"
-theine-core = "^0.4.5"
+theine-core = "^0.5.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
