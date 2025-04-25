@@ -1,4 +1,18 @@
 # Theine
+
+**IMPORTANT: Theine is currently undergoing a major rewrite and refactor to become a thread-safe, high-performance concurrent cache. V2 will support free-threading in Python and will focus on enhancing multi-threading performance. Some APIs will change in the update.**
+
+Planned Updates in V2
+- **Single Policy**: V2 will feature only one caching policy, Adaptive Window-TinyLFU, so the policy option in the API will be removed.
+- **Improved Hit Ratio**: The current TinyLFU (tlfu) policy will be optimized to achieve a higher hit ratio.
+- **Unified Expiration Thread**: Instead of each cache instance using a separate thread for proactive expiration as in V1, V2 will utilize a single thread, with all cache instances scheduling expirations through asyncio.
+- **Enhanced Thread Safety and Concurrency**: Mutexes will be added to ensure thread safety, alongside advanced concurrency optimizations such as sharding to boost performance.
+- **Memory Optimization**: Memory usage per cached item will be reduced.
+
+Python’s free-threading support is still evolving rapidly. And compared to Go, the Python ecosystem and tooling around free-threading remain relatively immature, with ongoing uncertainties around safety and scalability. As a result, progress may take some time. If you're interested in the current state of free-threaded Python, you can read more in this discussion: [PEP 779 – Criteria for Supported Status for Free-Threaded Python](https://discuss.python.org/t/pep-779-criteria-for-supported-status-for-free-threaded-python/84319).
+
+---
+
 High performance in-memory cache inspired by [Caffeine](https://github.com/ben-manes/caffeine).
 
 - High performance [Rust core](https://github.com/Yiling-J/theine-core)
@@ -63,7 +77,7 @@ Reference:
 https://static.usenix.org/event/usenix05/tech/general/full_papers/jiang/jiang_html/html.html
 
 
-## API
+## API (V1)
 
 Key should be a **Hashable** object, and value can be any **Python object**. If key type is not **str/int**, Theine will generate a unique key string automatically, this unique str will use extra space in memory and increase get/set/remove overhead.
 
