@@ -67,7 +67,9 @@ class EventData:
 # https://github.com/python/cpython/issues/90780
 # use event to protect from thundering herd
 class CachedAwaitable:
-    def __init__(self, awaitable: Awaitable[Any], on_error: Callable[[BaseException], None]) -> None:
+    def __init__(
+        self, awaitable: Awaitable[Any], on_error: Callable[[BaseException], None]
+    ) -> None:
         self.awaitable = awaitable
         self.future: Optional[Awaitable[Any]] = None
         self.result = sentinel
@@ -154,7 +156,9 @@ def Wrapper(
         if _is_async:
             result, ok = _cache.get(key)
             if not ok:
-                result = CachedAwaitable(_func(*args, **kwargs),lambda _: _cache.delete(key))
+                result = CachedAwaitable(
+                    _func(*args, **kwargs), lambda _: _cache.delete(key)
+                )
                 _cache.set(key, result, _timeout)
             return result
 
@@ -191,7 +195,9 @@ class Memoize:
         self.typed = typed
 
     def __call__(self, fn: Callable[Concatenate[S, P], VT]) -> Cached[S, P, VT]:
-        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, inspect.iscoroutinefunction(fn))
+        wrapper = Wrapper(
+            fn, self.timeout, self.cache, self.typed, inspect.iscoroutinefunction(fn)
+        )
         return cast(Cached[S, P, VT], update_wrapper(wrapper, fn))
 
 
