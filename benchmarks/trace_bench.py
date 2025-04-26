@@ -1,14 +1,16 @@
 import gzip
+import struct
 from datetime import timedelta
 from random import randint
-from typing import Callable, Iterator
+from typing import Callable, Iterator, List
 
+import zstandard as zstd
 import matplotlib.pyplot as plt
 from bounded_zipf import Zipf
 from theine import Cache
 from cachetools import LRUCache, FIFOCache
 import numpy as np
-from scipy.interpolate import make_interp_spline, BSpline
+from scipy.interpolate import PchipInterpolator
 
 
 plt.style.use("ggplot")
@@ -34,33 +36,83 @@ def arc_key_gen(name: str) -> Iterator:
                 yield str(base + i), GET
 
 
-def bench_theine(cap: int, gen: Callable[..., Iterator], name: str):
+def oracle_general_gen(name: str) -> Iterator:
+    with open("benchmarks/trace/wiki_2019t.oracleGeneral.zst", "rb") as f:
+        dctx = zstd.ZstdDecompressor()
+        with dctx.stream_reader(f) as reader:
+            buffer_size = 24
+            buffer = bytearray(buffer_size)
+
+            while True:
+                try:
+                    num_read = reader.readinto(buffer)
+                    if num_read < buffer_size:
+                        return
+                except EOFError:
+                    return
+                except Exception as err:
+                    raise Exception(f"Wrapped error: {err}")
+
+                # Interpret bytes 4 through the end as a little-endian unsigned 64-bit integer
+                id = struct.unpack_from("<Q", buffer, offset=4)[0]
+                yield str(id), GET
+
+
+def lirs_key_gen(name: str) -> Iterator:
+    with gzip.open("benchmarks/trace/loop.gz", "rt") as f:
+        for line in f:
+            k = line.strip()
+            yield k, GET
+
+
+def corda_key_gen(name: str) -> Iterator:
+    buffer_size = 8
+    buffer = bytearray(buffer_size)
+    with gzip.open("benchmarks/trace/trace_vaultservice_large.gz", "rb") as reader:
+        while True:
+            try:
+                num_read = reader.readinto(buffer)
+                if num_read < buffer_size:
+                    return
+            except EOFError:
+                return
+            except Exception as err:
+                raise Exception(f"Wrapped error: {err}")
+
+            id = struct.unpack_from(">Q", buffer)[0]
+            yield str(id), GET
+
+
+def bench_theine(cap: int, gens: List[Callable[..., Iterator]], name: str):
     counter = 0
     miss = 0
 
-    cache = Cache(cap)
+    cache = Cache(cap, True)
 
-    for key, op in gen(name):
-        counter += 1
-        if op == GET:
-            v = cache.get(key)
-            if v is not None:
-                assert key == v
+    for gen in gens:
+        for key, op in gen(name):
+            counter += 1
+            if op == GET:
+                v = cache.get(key)
+                if v[1]:
+                    assert key == v[0]
+                else:
+                    miss += 1
+                    cache.set(key, key)
             else:
-                miss += 1
                 cache.set(key, key)
-        else:
-            cache.set(key, key)
 
-        if counter % 100000 == 0:
-            print(".", end="", flush=True)
+            if counter % 100000 == 0:
+                print(".", end="", flush=True)
     print("")
     hr = (counter - miss) / counter
     print(f"---- theine hit ratio: {hr:.3f}")
     return hr
 
 
-def bench_cachetools(policy: str, cap: int, gen: Callable[..., Iterator], name: str):
+def bench_cachetools(
+    policy: str, cap: int, gens: List[Callable[..., Iterator]], name: str
+):
     counter = 0
     miss = 0
 
@@ -69,20 +121,21 @@ def bench_cachetools(policy: str, cap: int, gen: Callable[..., Iterator], name: 
     elif policy == "FIFO":
         cache = FIFOCache(cap)
 
-    for key, op in gen(name):
-        counter += 1
-        if op == GET:
-            v = cache.get(key)
-            if v is not None:
-                assert key == v
+    for gen in gens:
+        for key, op in gen(name):
+            counter += 1
+            if op == GET:
+                v = cache.get(key)
+                if v is not None:
+                    assert key == v
+                else:
+                    miss += 1
+                    cache[key] = key
             else:
-                miss += 1
                 cache[key] = key
-        else:
-            cache[key] = key
 
-        if counter % 100000 == 0:
-            print(".", end="", flush=True)
+            if counter % 100000 == 0:
+                print(".", end="", flush=True)
     print("")
     hr = (counter - miss) / counter
     print(f"---- cachetools {policy} hit ratio: {hr:.3f}")
@@ -116,7 +169,7 @@ def init_plot(title):
     return fig, ax
 
 
-def bench_and_plot(caps, key_gen, name):
+def bench_and_plot(caps, key_gens, name):
     x = []
     y_tlfu = []
     y_cachetools_lru = []
@@ -125,24 +178,27 @@ def bench_and_plot(caps, key_gen, name):
     for cap in caps:
         print(f"======= {name} cache size: {cap} =======")
         x.append(cap)
-        y_tlfu.append(bench_theine(cap, key_gen, name))
-        y_cachetools_lru.append(bench_cachetools("LRU", cap, key_gen, name))
-        y_cachetools_fifo.append(bench_cachetools("FIFO", cap, key_gen, name))
+        y_tlfu.append(bench_theine(cap, key_gens, name))
+        y_cachetools_lru.append(bench_cachetools("LRU", cap, key_gens, name))
+        y_cachetools_fifo.append(bench_cachetools("FIFO", cap, key_gens, name))
 
     fig, ax = init_plot(f"Hit Ratios - {name}")
     # Smooth the lines using np.interp for interpolation
     x_new = np.linspace(min(x), max(x), 300)
 
-    tlfu_spl = make_interp_spline(x, y_tlfu, k=3)
-    clru_spl = make_interp_spline(x, y_cachetools_lru, k=3)
-    cfifo_spl = make_interp_spline(x, y_cachetools_fifo, k=3)
+    tlfu_spl = PchipInterpolator(x, y_tlfu)
+    clru_spl = PchipInterpolator(x, y_cachetools_lru)
+    cfifo_spl = PchipInterpolator(x, y_cachetools_fifo)
     y_tlfu_smooth = tlfu_spl(x_new)
     y_clru_smooth = clru_spl(x_new)
     y_cfifo_smooth = cfifo_spl(x_new)
 
-    ax.plot(x_new, y_tlfu_smooth, "b-", label="w-tlfu")
+    ax.plot(x_new, y_tlfu_smooth, "b-", label="theine")
     ax.plot(x_new, y_clru_smooth, "r-", label="cachetools-lru")
     ax.plot(x_new, y_cfifo_smooth, "c-", label="cachetools-fifo")
+    ax.plot(x, y_tlfu, "bo")
+    ax.plot(x, y_cachetools_lru, "ro")
+    ax.plot(x, y_cachetools_fifo, "co")
 
     ax.legend()
     fig.savefig(f"benchmarks/{name.lower()}.png", dpi=200)
@@ -150,7 +206,9 @@ def bench_and_plot(caps, key_gen, name):
 
 # infinit_run(50000)
 
-bench_and_plot([100, 200, 500, 1000, 2000, 5000, 10000, 20000], zipf_key_gen, "Zipf")
+bench_and_plot(
+    [500, 1000, 2000, 5000, 10_000, 20_000, 40_000, 80_000], [zipf_key_gen], "Zipf"
+)
 bench_and_plot(
     [
         1_000_000,
@@ -162,23 +220,55 @@ bench_and_plot(
         7_000_000,
         8_000_000,
     ],
-    arc_key_gen,
+    [arc_key_gen],
     "DS1",
 )
 bench_and_plot(
     [100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000],
-    arc_key_gen,
+    [arc_key_gen],
     "S3",
 )
 
 bench_and_plot(
     [25_000, 50_000, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000],
-    arc_key_gen,
+    [arc_key_gen],
     "P3",
 )
 
 bench_and_plot(
-    [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000], arc_key_gen, "P8"
+    [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
+    [arc_key_gen],
+    "P8",
 )
 
-bench_and_plot([250, 500, 750, 1000, 1250, 1500, 1750, 2000], arc_key_gen, "OLTP")
+bench_and_plot(
+    [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
+    [arc_key_gen],
+    "OLTP",
+)
+
+bench_and_plot(
+    [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
+    [lirs_key_gen],
+    "LIRS",
+)
+
+bench_and_plot(
+    [256, 512, 1024, 2048],
+    [corda_key_gen],
+    "VAULT",
+)
+
+bench_and_plot(
+    [256, 512, 1024, 2048],
+    [
+        corda_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        corda_key_gen,
+    ],
+    "MIX",
+)

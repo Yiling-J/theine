@@ -14,6 +14,7 @@ from theine.theine import Memoize
 
 EXCEPTION_THROWING_CACHE_TTL = timedelta(seconds=3)
 
+
 @Memoize(1000, None)
 def foo(id: int, m: Mock) -> Dict[str, int]:
     m(id)
@@ -46,11 +47,13 @@ async def async_foo(id: int, m: Mock) -> Dict:
 def _(id: int, m: Mock) -> str:
     return f"id-{id}"
 
-@Memoize(Cache("tlfu", 1000), timeout=EXCEPTION_THROWING_CACHE_TTL)
+
+@Memoize(1000, ttl=EXCEPTION_THROWING_CACHE_TTL)
 async def async_foo_that_can_raise(input_val: int, m: Mock) -> Dict:
     m(input_val)
     await asyncio.sleep(1)
     return {"id": input_val}
+
 
 @async_foo_that_can_raise.key
 def _(input_val: int, m: Mock) -> str:
@@ -163,19 +166,21 @@ async def test_async_decorator() -> None:
     ints = [i[0][0] for i in mock.call_args_list]
     assert set(ints) == {0, 1, 2, 3, 4, 5}
 
+
 @pytest.mark.asyncio
 async def test_async_decorator_with_exceptions() -> None:
     exception_to_raise = Exception("Test exception")
     assert async_foo_that_can_raise.__name__ == "async_foo_that_can_raise"  # type: ignore
+
     async def assert_id(id: int, m: Mock):
         data = await async_foo_that_can_raise(id, m)
         assert data["id"] == id
- 
+
     # verify exception is properly raised on first call
     mock = Mock(side_effect=exception_to_raise)
     with pytest.raises(Exception) as exc_info:
         await async_foo_that_can_raise(1, mock)
-    assert exc_info.value == exception_to_raise 
+    assert exc_info.value == exception_to_raise
     assert mock.call_count == 1
 
     # prior call should not be cached due to exception and this will run
@@ -188,7 +193,7 @@ async def test_async_decorator_with_exceptions() -> None:
     mock = Mock(return_value=None)
     result = await async_foo_that_can_raise(1, mock)
     assert result["id"] == 1
-    assert mock.call_count == 0    
+    assert mock.call_count == 0
 
     # sleep enough to let cache expire and verify new exceptions are raised again
     await asyncio.sleep(EXCEPTION_THROWING_CACHE_TTL.total_seconds() + 0.1)
@@ -202,11 +207,11 @@ async def test_async_decorator_with_exceptions() -> None:
 @pytest.mark.asyncio
 async def test_async_decorator_same_exception_herd() -> None:
     total = 500
-    mock = Mock() 
+    mock = Mock()
 
     def throwing_side_effect(*args, **kwargs):
         raise Exception("Test exception")
-    
+
     mock.side_effect = throwing_side_effect
 
     coros = [async_foo(20, mock) for _ in range(total)]
@@ -214,15 +219,15 @@ async def test_async_decorator_same_exception_herd() -> None:
 
     # should all be exceptions
     assert all([isinstance(res, Exception) for res in results])
-    
+
     # should all be the same exception
     uniq_exceptions = set(results)
     assert len(uniq_exceptions) == 1
-    
+
     # herd should have only result in 1 call
     assert mock.call_count == 1
-    
-    # verify if these get awaited on again for some reason same exception is raised 
+
+    # verify if these get awaited on again for some reason same exception is raised
     for coro in coros:
         with pytest.raises(Exception) as exc_info:
             await coro
@@ -364,7 +369,7 @@ def _(id: int) -> str:
     return f"id-{id}"
 
 
-def test_timeout() -> None:
+def test_ttl() -> None:
     for i in range(30):
         result = foo_to(i)
         assert result["id"] == i
@@ -387,7 +392,7 @@ def foo_to_auto(id: int, m: Mock) -> Dict:
     return {"id": id}
 
 
-def test_timeout_auto_key() -> None:
+def test_ttl_auto_key() -> None:
     mock = Mock()
     for i in range(30):
         result = foo_to_auto(i, mock)
@@ -433,7 +438,7 @@ def test_cache_full_auto_key_sync_multi() -> None:
     assert len(foo_to_auto._cache) == 1000
 
 
-@Memoize(1000, timeout=None)
+@Memoize(1000, ttl=None)
 def read_auto_key(key: str) -> str:
     return key
 

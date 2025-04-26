@@ -3,7 +3,7 @@ import time
 from datetime import timedelta
 from random import randint
 from time import sleep
-
+from contextlib import nullcontext
 
 from bounded_zipf import Zipf  # type: ignore[import]
 
@@ -219,3 +219,54 @@ def test_cache_stats() -> None:
     assert stats.hit_rate > 0.5
     assert stats.hit_rate < 1
     assert stats.hit_rate == stats.hit_count / stats.request_count
+
+
+def test_set_cache_nolcok() -> None:
+    cache = Cache(500)
+    assert type(cache._core_mutex) == type(threading.Lock())
+    for shard in cache._shards:
+        assert type(shard._mutex) == type(threading.Lock())
+
+    cache = Cache(500, True)
+    assert type(cache._core_mutex) == type(nullcontext())
+    for shard in cache._shards:
+        assert type(shard._mutex) == type(nullcontext())
+
+
+def zipf_key_gen(total):
+    z = Zipf(1.01, 9.0, 50000 * 1000)
+    for _ in range(total):
+        yield z.get()
+
+
+def test_zipf() -> None:
+    miss = 0
+    cache = Cache(50000)
+    for key in zipf_key_gen(10000000):
+        v = cache.get(key)
+        if v[1]:
+            assert key == v[0]
+        else:
+            miss += 1
+            cache.set(key, key)
+    stats = cache.stats()
+    assert stats.hit_rate > 0.5 and stats.hit_rate < 0.6
+    assert 1 - (miss / 10000000) > 0.5 and 1 - (miss / 10000000) < 0.6
+
+
+def test_zipf_correctness() -> None:
+    for size in [500, 2000, 10000, 50000]:
+        cache = Cache(size)
+        for key in zipf_key_gen(1000000):
+            v = cache.get(key)
+            if v[1]:
+                assert key == v[0]
+            else:
+                cache.set(key, key)
+        cache._force_drain_write()
+        total = 0
+        for shard in cache._shards:
+            total += len(shard._map)
+        info = cache.core.debug_info()
+        assert total == info.len
+        assert info.window_len + info.probation_len + info.protected_len == total

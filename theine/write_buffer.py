@@ -1,19 +1,25 @@
 from threading import Lock
 from typing import List, Tuple, Callable
+from contextlib import nullcontext
 
 
 BufferSize = 16
 
 
 class WriteBuffer:
-    def __init__(self, clear_buffer: Callable[[List[Tuple[int, int]]], None]):
+    def __init__(
+        self,
+        clear_buffer: Callable[[List[Tuple[int, int]]], None],
+        nolock: bool = False,
+    ):
         # tuple: (key_hash, ttl)
         self.buffer: List[Tuple[int, int]] = []
         self.waiting: List[Tuple[int, int]] = []
         self.processing = False
-        self.mutex = Lock()
+        self.mutex = Lock() if not nolock else nullcontext()
         self.swap_mutex = Lock()
         self.clear_buffer = clear_buffer
+        self.nolock = nolock
 
     def add(self, key_hash: int, ttl: int) -> None:
         should_clear = False
@@ -28,7 +34,8 @@ class WriteBuffer:
         if should_clear:
             # use spinlock to trigger write buffer processing as fast as possible
             while True:
-                if self.swap_mutex.acquire(blocking=False):
+                if self.nolock or self.swap_mutex.acquire(blocking=False):
                     self.clear_buffer(self.waiting)
-                    self.swap_mutex.release()
+                    if not self.nolock:
+                        self.swap_mutex.release()
                     break

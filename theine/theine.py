@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from threading import Lock, Event, Thread
 from functools import _make_key, update_wrapper
+from contextlib import nullcontext, AbstractContextManager
 from typing import (
     Any,
     Awaitable,
@@ -127,7 +128,7 @@ class Cached(Protocol[S, P, VT]):
 @no_type_check
 def Wrapper(
     fn: Callable,
-    timeout: Optional[timedelta],
+    ttl: Optional[timedelta],
     cache: "Cache",
     typed: bool,
     is_async: bool,
@@ -136,7 +137,7 @@ def Wrapper(
     _events = {}
     _func = fn
     _cache = cache
-    _timeout = timeout
+    _ttl = ttl
     _typed = typed
     _auto_key = True
     _is_async = is_async
@@ -159,13 +160,13 @@ def Wrapper(
                 result = CachedAwaitable(
                     _func(*args, **kwargs), lambda _: _cache.delete(key)
                 )
-                _cache.set(key, result, _timeout)
+                _cache.set(key, result, _ttl)
             return result
 
         return _cache._get_or_compute(key, lambda: fn(*args, **kwargs))
 
     fetch._cache = _cache
-    _cache.with_loader(fn, timeout)
+    _cache.with_loader(fn, ttl)
     fetch.key = key
     return fetch
 
@@ -177,52 +178,57 @@ class Memoize:
     Theine will generate a key for you based on your function inputs.
 
     :param size: cache size.
-    :param timeout: timedelta to store the function result. Default is None which means no expiration.
+    :param ttl: timedelta to store the function result. Default is None which means no expiration.
     :param typed: Only valid with auto-key mode. If typed is set to true,
         function arguments of different types will be cached separately.
         If typed is false, the implementation will usually regard them as equivalent calls and only cache
         a single result. (Some types such as str and int may be cached separately even when typed is false.)
+    :param nolock: disables thread locking for get and set operations. Defaults to False. Enable this only if your code does not use multi-threading.
     """
 
     def __init__(
         self,
         size: int,
-        timeout: Optional[timedelta],
+        ttl: Optional[timedelta],
         typed: bool = False,
+        nolock: bool = False,
     ):
-        self.cache = Cache[Hashable, Any](size)
-        self.timeout = timeout
+        self.cache = Cache[Hashable, Any](size, nolock)
+        self.ttl = ttl
         self.typed = typed
 
     def __call__(self, fn: Callable[Concatenate[S, P], VT]) -> Cached[S, P, VT]:
         wrapper = Wrapper(
-            fn, self.timeout, self.cache, self.typed, inspect.iscoroutinefunction(fn)
+            fn, self.ttl, self.cache, self.typed, inspect.iscoroutinefunction(fn)
         )
         return cast(Cached[S, P, VT], update_wrapper(wrapper, fn))
 
 
 class Shard(Generic[KT, VT]):
 
-    def __init__(self) -> None:
+    def __init__(self, nolock: bool) -> None:
         self._map: Dict[KT, Entry[VT]] = {}
         # key map is used to find evicted entries in _map because policy returns hashed key value
         self._key_map: Dict[int, KT] = {}
-        self._mutex: Lock = Lock()
+        self._mutex = Lock() if not nolock else nullcontext()
         self._hits = itertools.count()
         self._misses = itertools.count()
+        self._nolock = nolock
 
     def get(self, key: KT, key_hash: int) -> Tuple[Optional[VT], bool]:
         try:
-            entry = self._map[key]
-            if entry.expire > 0 and entry.expire <= time.monotonic_ns():
-                next(self._misses)
-                with self._mutex:
+            # https://docs.python.org/3/howto/free-threading-python.html
+            # It’s recommended to use the threading.Lock or other synchronization primitives instead of relying on the internal locks of built-in types, when possible.
+            with self._mutex:
+                entry = self._map[key]
+                if entry.expire > 0 and entry.expire <= time.monotonic_ns():
+                    next(self._misses)
                     self._map.pop(key, sentinel)
                     self._key_map.pop(key_hash, sentinel)
                     return (None, False)
-            else:
-                next(self._hits)
-                return (entry.value, True)
+                else:
+                    next(self._hits)
+                    return (entry.value, True)
         except KeyError:
             next(self._misses)
             return (None, False)
@@ -327,9 +333,9 @@ class Cache(Generic[KT, VT]):
 
     _loader: Optional[Callable[[KT], VT]]
 
-    _timeout: Optional[timedelta]
+    _ttl: Optional[timedelta]
 
-    def __init__(self, size: int):
+    def __init__(self, size: int, nolock: bool = False):
         shard_count = round_up_power_of_2(os.cpu_count() or 4)
 
         if shard_count < 16:
@@ -338,7 +344,7 @@ class Cache(Generic[KT, VT]):
             shard_count = 128
 
         self._shards: Tuple[Shard[KT, VT], ...] = tuple(
-            [Shard() for _ in range(shard_count)]
+            [Shard(nolock) for _ in range(shard_count)]
         )
         self.core = TlfuCore(size)
         self._closed = False
@@ -347,14 +353,15 @@ class Cache(Generic[KT, VT]):
         self.max_size = size
         self._shard_count = shard_count
         self.max_int64 = (1 << 64) - 1
-        self._read_buffer = StripedBuffer(self._drain_read)
-        self._write_buffer = WriteBuffer(self._drain_write)
+        self._read_buffer = StripedBuffer(self._drain_read, nolock)
+        self._write_buffer = WriteBuffer(self._drain_write, nolock)
         # core is single thread, all core operation must hold this mutex
-        self._core_mutex = Lock()
+        self._core_mutex = Lock() if not nolock else nullcontext()
         self._maintainer = asyncio.run_coroutine_threadsafe(
             self.maintenance(), loop=_maintainer_loop
         )
         self._events: Dict[KT, EventData] = {}
+        self._nolock = nolock
 
     def __len__(self) -> int:
         total = 0
@@ -364,7 +371,7 @@ class Cache(Generic[KT, VT]):
 
     def with_loader(self, loader: Callable[[KT], VT], ttl: Optional[timedelta]) -> None:
         self._loader = loader
-        self._timeout = ttl
+        self._ttl = ttl
 
     def get(self, key: KT) -> Tuple[Optional[VT], bool]:
         """
@@ -375,7 +382,8 @@ class Cache(Generic[KT, VT]):
         """
         kh = spread(hash(key))
         (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
-        self._read_buffer.add(kh)
+        if ok:
+            self._read_buffer.add(kh)
         return (v, ok)
 
     def _ttl_nano(self, ttl: Optional[timedelta]) -> int:
@@ -398,14 +406,14 @@ class Cache(Generic[KT, VT]):
         event = EventData(Event(), None)
         ve = self._events.setdefault(key, event)
         if ve is event:
-            # lock the shard, so concatenate write is not allowed
             with shard._mutex:
                 result_sync = fn()
                 event.data = result_sync
                 self._events.pop(key, None)
-                ttl_ns = self._ttl_nano(self._timeout)
+                ttl_ns = self._ttl_nano(self._ttl)
                 shard._set_nolock(key, kh, result_sync, ttl_ns)
             event.event.set()
+            self._write_buffer.add(kh, ttl_ns)
         else:
             ve.event.wait()
             result_sync = cast(VT, ve.data)
@@ -481,7 +489,6 @@ class Cache(Generic[KT, VT]):
         Remove expired keys.
         """
         while True:
-
             evicted: List[int] = []
             with self._core_mutex:
                 if self._closed:
