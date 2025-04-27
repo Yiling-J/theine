@@ -1,37 +1,48 @@
-[tool.poetry]
+[project]
 name = "theine"
 version = "2.0.0"
 description = "high performance in-memory cache"
-authors = ["Yiling-J <njjyl723@gmail.com>"]
+authors = [{ name = "Yiling-J", email = "njjyl723@gmail.com" }]
+requires-python = ">=3.9,<4.0"
 readme = "README.md"
+license = "BSD-3-Clause"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries",
-    "Topic :: Software Development :: Libraries :: Python Modules"
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-license = "BSD-3-Clause"
+dependencies = [
+    "typing-extensions>=4.4.0,<5",
+    "theine-core",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.9,<4.0"
-typing-extensions = "^4.4.0"
-theine-core = {git = "https://github.com/Yiling-J/theine-core.git", branch = "v2"}
+[dependency-groups]
+dev = [
+    "pytest>=7.2.1,<8",
+    "pytest-benchmark>=4.0.0,<5",
+    "typing-extensions>=4.4.0,<5",
+    "mypy>=1.11.1,<2",
+    "django~=4.2",
+    "pytest-django>=4.5.2,<5",
+    "pytest-asyncio>=0.20.3,<0.21",
+    "cachetools>=5.5.0,<6",
+    "types-cachetools>=5.3.0.0,<6",
+    "isort>=5.5.0,<6",
+    "py-spy>=0.3.14,<0.4",
+    "cacheout>=0.14.1,<0.15",
+    "bounded-zipf>=1.0.0,<2",
+    "django-stubs[compatible-mypy]>=5.1.3,<6",
+    "zstandard>=0.23.0,<0.24",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.2.1"
-pytest-benchmark = "^4.0.0"
-typing-extensions = "^4.4.0"
-mypy = "^1.11.1"
-django = "^4.2"
-pytest-django = "^4.5.2"
-pytest-asyncio = "^0.20.3"
-cachetools = "^5.5.0"
-types-cachetools = "^5.3.0.0"
-isort = "^5.5.0"
-py-spy = "^0.3.14"
-cacheout = "^0.14.1"
-bounded-zipf = "^1.0.0"
-django-stubs = {extras = ["compatible-mypy"], version = "^5.1.3"}
-zstandard = "^0.23.0"
+[tool.uv]
+
+[tool.uv.sources]
+theine-core = { git = "https://github.com/Yiling-J/theine-core.git", branch = "v2" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.mypy]
 strict = true
@@ -44,7 +55,3 @@ exclude = [
 [tool.django-stubs]
 django_settings_module = 'tests.adapters.settings.theine'
 strict_settings = false
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
