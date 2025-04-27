@@ -389,7 +389,7 @@ dev = [
 [[package]]
 name = "theine-core"
 version = "2.0.0"
-source = { git = "https://github.com/Yiling-J/theine-core.git?branch=v2#adfbb0fc67a9d993fd9e895d31f164d7b0391ab2" }
+source = { git = "https://github.com/Yiling-J/theine-core.git?branch=v2#2539baff79e824bde7b959fb11ca28be670d7fda" }
 
 [[package]]
 name = "tomli"
