@@ -435,25 +435,37 @@ class Cache(Generic[KT, VT]):
     def _get_or_compute(self, key: KT, fn: Callable[[], VT]) -> VT:
         kh = spread(hash(key))
         (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
-        self._read_buffer.add(kh)
         if ok:
+            self._read_buffer.add(kh)
             return cast(VT, v)
 
         shard = self._shards[kh & (self._shard_count - 1)]
+        # nolock means single threading mode,
+        # where cache stampe problem not exists
+        if self._nolock:
+            r = fn()
+            ttl_ns = self._ttl_nano(self._ttl)
+            shard._set_nolock(key, kh, r, ttl_ns)
+            return r
+
         event = EventData(Event(), None)
-        ve = self._events.setdefault(key, event)
+        with shard._mutex:
+            ve = self._events.setdefault(key, event)
+        # the shard mutex is released when computing value for the key,
+        # so following get on same key can wait for the event.
+        # it's safe to do so because this method is only used for decorator,
+        # and user can not delete/update cache manually when using decorator
         if ve is event:
-            with shard._mutex:
-                result_sync = fn()
-                event.data = result_sync
-                self._events.pop(key, None)
-                ttl_ns = self._ttl_nano(self._ttl)
-                shard._set_nolock(key, kh, result_sync, ttl_ns)
+            result_sync = fn()
+            event.data = result_sync
+            self._events.pop(key, None)
+            ttl_ns = self._ttl_nano(self._ttl)
+            shard.set(key, kh, result_sync, ttl_ns)
             event.event.set()
             self._write_buffer.add(kh, ttl_ns)
         else:
             ve.event.wait()
-            result_sync = cast(VT, ve.data)
+        result_sync = cast(VT, ve.data)
         return result_sync
 
     def _get_loading(self, key: KT) -> Tuple[Optional[VT], bool]:
