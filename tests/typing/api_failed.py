@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Optional
-from theine.v2 import Memoize, Cache
+from theine import Memoize, Cache
 
 
 @Memoize(1000, None)
