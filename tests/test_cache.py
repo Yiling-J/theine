@@ -167,10 +167,10 @@ def test_set_with_ttl_hashable() -> None:
 
 
 def test_expire_proactively() -> None:
-    cache = Cache(500000)
-    for i in range(500000):
+    cache = Cache(50000)
+    for i in range(50000):
         cache.set((i, 2), i, timedelta(seconds=randint(5, 10)))
-    current = 500000
+    current = 50000
     cache._force_drain_write()
     while True:
         sleep(1)

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 from threading import Lock, Event, Thread
 from functools import _make_key, update_wrapper
-from contextlib import nullcontext, AbstractContextManager
 from typing import (
     Any,
     Awaitable,
@@ -124,6 +123,8 @@ class Cached(Protocol[S, P, VT]):
     @overload
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> VT: ...
 
+    def cache_stats(self) -> CacheStats: ...
+
 
 @no_type_check
 def Wrapper(
@@ -148,6 +149,9 @@ def Wrapper(
         _key_func = fn
         _auto_key = False
 
+    def cache_stats() -> CacheStats:
+        return _cache.stats()
+
     def fetch(*args, **kwargs):
         if _auto_key:
             key = _make_key(args, kwargs, _typed)
@@ -168,6 +172,7 @@ def Wrapper(
     fetch._cache = _cache
     _cache.with_loader(fn, ttl)
     fetch.key = key
+    fetch.cache_stats = cache_stats
     return fetch
 
 
@@ -210,7 +215,7 @@ class Shard(Generic[KT, VT]):
         self._map: Dict[KT, Entry[VT]] = {}
         # key map is used to find evicted entries in _map because policy returns hashed key value
         self._key_map: Dict[int, KT] = {}
-        self._mutex = Lock() if not nolock else nullcontext()
+        self._mutex = Lock()
         self._hits = itertools.count()
         self._misses = itertools.count()
         self._nolock = nolock
@@ -219,19 +224,24 @@ class Shard(Generic[KT, VT]):
         try:
             # https://docs.python.org/3/howto/free-threading-python.html
             # It’s recommended to use the threading.Lock or other synchronization primitives instead of relying on the internal locks of built-in types, when possible.
-            with self._mutex:
-                entry = self._map[key]
-                if entry.expire > 0 and entry.expire <= time.monotonic_ns():
-                    next(self._misses)
-                    self._map.pop(key, sentinel)
-                    self._key_map.pop(key_hash, sentinel)
-                    return (None, False)
-                else:
-                    next(self._hits)
-                    return (entry.value, True)
+            self._nolock or self._mutex.acquire()
+            entry = self._map[key]
+            if entry.expire > 0 and entry.expire <= time.monotonic_ns():
+                next(self._misses)
+                self._map.pop(key, sentinel)
+                self._key_map.pop(key_hash, sentinel)
+                return (None, False)
+            else:
+                next(self._hits)
+                return (entry.value, True)
         except KeyError:
             next(self._misses)
             return (None, False)
+        except Exception as err:
+            raise err
+        finally:
+            if not self._nolock:
+                self._mutex.release()
 
     def _set_nolock(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
         # remove exist first if key hash collision
@@ -251,7 +261,8 @@ class Shard(Generic[KT, VT]):
         return True
 
     def set(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
-        with self._mutex:
+        try:
+            self._nolock or self._mutex.acquire()
             # remove exist first if key hash collision
             # not policy update because same hash means same key in policy
             try:
@@ -267,9 +278,15 @@ class Shard(Generic[KT, VT]):
             self._map[key] = Entry(value, expire)
             self._key_map[key_hash] = key
             return True
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
 
     def set_ttl(self, key: KT, ttl: int) -> None:
-        with self._mutex:
+        try:
+            self._nolock or self._mutex.acquire()
             try:
                 entry = self._map[key]
             except KeyError:
@@ -279,26 +296,38 @@ class Shard(Generic[KT, VT]):
                 if ttl > 0:
                     expire = time.monotonic_ns() + ttl
                 entry.expire = expire
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
 
     def remove(self, key_hash: int) -> bool:
-        with self._mutex:
+        try:
+            self._nolock or self._mutex.acquire()
             try:
                 key = self._key_map.pop(key_hash)
             except KeyError:
                 return False
             else:
                 try:
-                    self._map.pop(key)
+                    del self._map[key]
                 except KeyError:
                     return False
                 else:
                     return True
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
 
     # check expire before remove, used in timer wheel expire only,
     # set(key, ttl1) -> ttl1_sync_to_policy -> set(key, ttl2) -> ttl1 expired -> key_removed -> ttl2_sync_to_policy
     # the key is already removed when policy aware ttl changed, make ttl2 no effect
     def remove_expired(self, key_hash: int) -> None:
-        with self._mutex:
+        try:
+            self._nolock or self._mutex.acquire()
             try:
                 key = self._key_map[key_hash]
             except KeyError:
@@ -312,6 +341,11 @@ class Shard(Generic[KT, VT]):
                     # expired, removed
                     self._key_map.pop(key_hash, sentinel)
                     self._map.pop(key, sentinel)
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
 
     def clear(self) -> None:
         with self._mutex:
@@ -353,10 +387,12 @@ class Cache(Generic[KT, VT]):
         self.max_size = size
         self._shard_count = shard_count
         self.max_int64 = (1 << 64) - 1
-        self._read_buffer = StripedBuffer(self._drain_read, nolock)
-        self._write_buffer = WriteBuffer(self._drain_write, nolock)
         # core is single thread, all core operation must hold this mutex
-        self._core_mutex = Lock() if not nolock else nullcontext()
+        self._core_mutex = Lock()
+        self._read_buffer = StripedBuffer(self._drain_read, nolock)
+        self._write_buffer = WriteBuffer(
+            self._drain_write, self._remove_keys, self._core_mutex, nolock
+        )
         self._maintainer = asyncio.run_coroutine_threadsafe(
             self.maintenance(), loop=_maintainer_loop
         )
@@ -381,7 +417,8 @@ class Cache(Generic[KT, VT]):
         :param default: returned value if key is not found in cache, default None.
         """
         kh = spread(hash(key))
-        (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
+        idx = kh & (self._shard_count - 1)
+        (v, ok) = self._shards[idx].get(key, kh)
         if ok:
             self._read_buffer.add(kh)
         return (v, ok)
@@ -431,25 +468,37 @@ class Cache(Generic[KT, VT]):
         )
 
     def _drain_read(self, keys: List[int]) -> None:
-        with self._core_mutex:
+        try:
+            self._nolock or self._core_mutex.acquire()
             self.core.access(keys)
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._core_mutex.release()
 
-    def _drain_write(self, entries: List[Tuple[int, int]]) -> None:
-        with self._core_mutex:
-            evicted = self.core.set(entries)
+    def _drain_write(self, entries: List[Tuple[int, int]]) -> List[int]:
+        return self.core.set(entries)
 
-        # each shard has its own mutex
-        for key in evicted:
+    def _remove_keys(self, keys: List[int]) -> None:
+        for key in keys:
             self._shards[key & (self._shard_count - 1)].remove(key)
 
     # send writer buffer to policy immediately, used in test and clear
     def _force_drain_write(self) -> None:
-        with self._core_mutex:
-            evicted = self.core.set(self._write_buffer.buffer)
-            self._write_buffer.buffer = self._write_buffer.buffer[:0]
-
-        for key in evicted:
-            self._shards[key & (self._shard_count - 1)].remove(key)
+        try:
+            self._nolock or self._core_mutex.acquire()
+            wb = self._write_buffer.buffer[: self._write_buffer.tail]
+            if len(wb) > 0:
+                evicted = self.core.set(wb)
+                for key in evicted:
+                    self._shards[key & (self._shard_count - 1)].remove(key)
+                self._write_buffer.tail = 0
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._core_mutex.release()
 
     # used in Django adapter touch method, sets a new expiration for a key
     def _access(self, key: KT, ttl: Optional[timedelta] = None) -> None:

@@ -1,6 +1,5 @@
 from threading import Lock
 from typing import List, Tuple, Callable
-from contextlib import nullcontext
 
 
 BufferSize = 16
@@ -9,33 +8,35 @@ BufferSize = 16
 class WriteBuffer:
     def __init__(
         self,
-        clear_buffer: Callable[[List[Tuple[int, int]]], None],
+        send_to_core: Callable[[List[Tuple[int, int]]], List[int]],
+        remove_keys: Callable[[List[int]], None],
+        core_mutex: Lock,
         nolock: bool = False,
     ):
         # tuple: (key_hash, ttl)
-        self.buffer: List[Tuple[int, int]] = []
-        self.waiting: List[Tuple[int, int]] = []
-        self.processing = False
-        self.mutex = Lock() if not nolock else nullcontext()
-        self.swap_mutex = Lock()
-        self.clear_buffer = clear_buffer
+        self.buffer: List[Tuple[int, int]] = [(0, 0) for _ in range(BufferSize)]
+        self.mutex = Lock()
+        self.core_mutex = core_mutex
+        self.send_to_core = send_to_core
+        self.remove_keys = remove_keys
+        self.tail = 0
         self.nolock = nolock
 
     def add(self, key_hash: int, ttl: int) -> None:
-        should_clear = False
-        with self.mutex:
-            self.buffer.append((key_hash, ttl))
-            if len(self.buffer) == BufferSize:
-                should_clear = True
-                with self.swap_mutex:
-                    self.waiting = self.buffer
-                    self.buffer = self.buffer[:0]
-
-        if should_clear:
-            # use spinlock to trigger write buffer processing as fast as possible
-            while True:
-                if self.nolock or self.swap_mutex.acquire(blocking=False):
-                    self.clear_buffer(self.waiting)
-                    if not self.nolock:
-                        self.swap_mutex.release()
-                    break
+        self.nolock or self.mutex.acquire()
+        current = self.tail
+        self.tail += 1
+        if current < BufferSize:
+            self.buffer[current] = (key_hash, ttl)
+        if self.nolock or self.core_mutex.acquire(current >= BufferSize):
+            wb = self.buffer[: self.tail]
+            self.tail = 0
+            if not self.nolock:
+                self.mutex.release()
+            evicted = self.send_to_core(wb)
+            if not self.nolock:
+                self.core_mutex.release()
+            self.remove_keys(evicted)
+        else:
+            if not self.nolock:
+                self.mutex.release()
