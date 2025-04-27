@@ -7,7 +7,7 @@ from time import sleep
 
 def test_write_buffer() -> None:
     cq = []
-    buffer = WriteBuffer(lambda s: cq.append(s), Lock(), False)
+    buffer = WriteBuffer(lambda s: cq.append(s), lambda s: s, Lock(), False)
     for i in range(40):
         buffer.add(i, 0)
     assert cq == [[(i, 0)] for i in range(40)]
@@ -16,7 +16,7 @@ def test_write_buffer() -> None:
 def test_write_buffer_busy_lock() -> None:
     cq = []
     lock = Lock()
-    buffer = WriteBuffer(lambda s: cq.append(s), lock, False)
+    buffer = WriteBuffer(lambda s: cq.append(s), lambda s: s, lock, False)
     lc = 0
     lock.acquire()
     for i in range(40):
@@ -42,7 +42,7 @@ def test_write_buffer_busy_lock() -> None:
 
 def test_write_buffer_multithreaded() -> None:
     cq = []
-    buffer = WriteBuffer(lambda s: cq.append(s), Lock(), False)
+    buffer = WriteBuffer(lambda s: cq.append(s), lambda s: s, Lock(), False)
 
     def add_items(start):
         for i in range(10):
@@ -70,7 +70,7 @@ def test_write_buffer_multithreaded() -> None:
 def test_write_buffer_busy_lock_multithreaded() -> None:
     cq = []
     lock = Lock()
-    buffer = WriteBuffer(lambda s: cq.append(s), lock, False)
+    buffer = WriteBuffer(lambda s: cq.append(s), lambda s: s, lock, False)
 
     def add_items(start):
         for i in range(10):

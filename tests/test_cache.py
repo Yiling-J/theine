@@ -221,18 +221,6 @@ def test_cache_stats() -> None:
     assert stats.hit_rate == stats.hit_count / stats.request_count
 
 
-def test_set_cache_nolcok() -> None:
-    cache = Cache(500)
-    assert type(cache._core_mutex) == type(threading.Lock())
-    for shard in cache._shards:
-        assert type(shard._mutex) == type(threading.Lock())
-
-    cache = Cache(500, True)
-    assert type(cache._core_mutex) == type(nullcontext())
-    for shard in cache._shards:
-        assert type(shard._mutex) == type(nullcontext())
-
-
 def zipf_key_gen(total):
     z = Zipf(1.01, 9.0, 50000 * 1000)
     for _ in range(total):

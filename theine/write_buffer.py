@@ -24,11 +24,11 @@ class WriteBuffer:
 
     def add(self, key_hash: int, ttl: int) -> None:
         self.nolock or self.mutex.acquire()
-        current = self.tail
+        self.buffer[self.tail] = (key_hash, ttl)
         self.tail += 1
-        if current < BufferSize:
-            self.buffer[current] = (key_hash, ttl)
-        if self.nolock or self.core_mutex.acquire(current >= BufferSize):
+        # if tail < bufferSize, buffer is not full yet, we try to schedule a clear if core is not busy
+        # if tail >= BufferSize: buffer is full and schedule a clear immediately
+        if self.nolock or self.core_mutex.acquire(self.tail >= BufferSize):
             wb = self.buffer[: self.tail]
             self.tail = 0
             if not self.nolock:
