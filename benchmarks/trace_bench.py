@@ -272,3 +272,9 @@ bench_and_plot(
     ],
     "MIX",
 )
+
+bench_and_plot(
+    [20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
+    [oracle_general_gen],
+    "WIKI CDN",
+)
