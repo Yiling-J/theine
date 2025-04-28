@@ -1,5 +1,6 @@
 import gzip
 import struct
+import os
 from datetime import timedelta
 from random import randint
 from typing import Callable, Iterator, List
@@ -11,6 +12,7 @@ from theine import Cache
 from cachetools import LRUCache, FIFOCache
 import numpy as np
 from scipy.interpolate import PchipInterpolator
+import concurrent.futures
 
 
 plt.style.use("ggplot")
@@ -37,7 +39,12 @@ def arc_key_gen(name: str) -> Iterator:
 
 
 def oracle_general_gen(name: str) -> Iterator:
-    with open("benchmarks/trace/wiki_2019t.oracleGeneral.zst", "rb") as f:
+    path = ""
+    if name == "WIKI CDN":
+        path = "benchmarks/trace/wiki_2019t.oracleGeneral.zst"
+    if name == "Twitter Cluster 52":
+        path = "/Volumes/CCCOMA_X64FRE_ZH-CN_DV9/cluster52.oracleGeneral.sample10.zst"
+    with open(path, "rb") as f:
         dctx = zstd.ZstdDecompressor()
         with dctx.stream_reader(f) as reader:
             buffer_size = 24
@@ -204,77 +211,134 @@ def bench_and_plot(caps, key_gens, name):
     fig.savefig(f"benchmarks/{name.lower()}.png", dpi=200)
 
 
+def bench_and_plot_parallel(caps, key_gens, name):
+    x = []
+    y_tlfu = []
+    y_cachetools_lru = []
+    y_cachetools_fifo = []
+
+    threads = []
+    futures = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        for cap in caps:
+            futures[executor.submit(bench_theine, cap, key_gens, name)] = ("theine", cap)
+            futures[executor.submit(bench_cachetools, "LRU", cap, key_gens, name)] = ("lru", cap)
+            futures[executor.submit(bench_cachetools, "FIFO", cap, key_gens, name)] = ("fifo", cap)
+
+        m = {}
+        for future in concurrent.futures.as_completed(futures):
+            tp, cap = futures[future]
+            data = future.result()
+            if cap not in m:
+                m[cap] = [0, 0, 0]
+            if tp == "theine":
+                m[cap][0] = data
+            elif tp == "lru":
+                m[cap][1] = data
+            elif tp == "fifo":
+                m[cap][2] = data
+
+    keys = list(m.keys())
+    keys.sort()
+    for key in keys:
+        x.append(key)
+        v = m[key]
+        y_tlfu.append(v[0])
+        y_cachetools_lru.append(v[1])
+        y_cachetools_fifo.append(v[2])
+
+    fig, ax = init_plot(f"Hit Ratios - {name}")
+    # Smooth the lines using np.interp for interpolation
+    x_new = np.linspace(min(x), max(x), 300)
+
+    tlfu_spl = PchipInterpolator(x, y_tlfu)
+    clru_spl = PchipInterpolator(x, y_cachetools_lru)
+    cfifo_spl = PchipInterpolator(x, y_cachetools_fifo)
+    y_tlfu_smooth = tlfu_spl(x_new)
+    y_clru_smooth = clru_spl(x_new)
+    y_cfifo_smooth = cfifo_spl(x_new)
+
+    ax.plot(x_new, y_tlfu_smooth, "b-", label="theine")
+    ax.plot(x_new, y_clru_smooth, "r-", label="cachetools-lru")
+    ax.plot(x_new, y_cfifo_smooth, "c-", label="cachetools-fifo")
+    ax.plot(x, y_tlfu, "bo")
+    ax.plot(x, y_cachetools_lru, "ro")
+    ax.plot(x, y_cachetools_fifo, "co")
+
+    ax.legend()
+    fig.savefig(f"benchmarks/{name.lower()}.png", dpi=200)
+
 # infinit_run(50000)
 
-bench_and_plot(
-    [500, 1000, 2000, 5000, 10_000, 20_000, 40_000, 80_000], [zipf_key_gen], "Zipf"
-)
-bench_and_plot(
-    [
-        1_000_000,
-        2_000_000,
-        3_000_000,
-        4_000_000,
-        5_000_000,
-        6_000_000,
-        7_000_000,
-        8_000_000,
-    ],
-    [arc_key_gen],
-    "DS1",
-)
-bench_and_plot(
-    [100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000],
-    [arc_key_gen],
-    "S3",
-)
+# bench_and_plot(
+#     [500, 1000, 2000, 5000, 10_000, 20_000, 40_000, 80_000], [zipf_key_gen], "Zipf"
+# )
+# bench_and_plot(
+#     [
+#         1_000_000,
+#         2_000_000,
+#         3_000_000,
+#         4_000_000,
+#         5_000_000,
+#         6_000_000,
+#         7_000_000,
+#         8_000_000,
+#     ],
+#     [arc_key_gen],
+#     "DS1",
+# )
+# bench_and_plot(
+#     [100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000],
+#     [arc_key_gen],
+#     "S3",
+# )
 
-bench_and_plot(
-    [25_000, 50_000, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000],
-    [arc_key_gen],
-    "P3",
-)
+# bench_and_plot(
+#     [25_000, 50_000, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000],
+#     [arc_key_gen],
+#     "P3",
+# )
 
-bench_and_plot(
-    [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
-    [arc_key_gen],
-    "P8",
-)
+# bench_and_plot(
+#     [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
+#     [arc_key_gen],
+#     "P8",
+# )
 
-bench_and_plot(
-    [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
-    [arc_key_gen],
-    "OLTP",
-)
+# bench_and_plot(
+#     [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
+#     [arc_key_gen],
+#     "OLTP",
+# )
 
-bench_and_plot(
-    [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
-    [lirs_key_gen],
-    "LIRS",
-)
+# bench_and_plot(
+#     [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
+#     [lirs_key_gen],
+#     "LIRS",
+# )
 
-bench_and_plot(
-    [256, 512, 1024, 2048],
-    [corda_key_gen],
-    "VAULT",
-)
+# bench_and_plot(
+#     [256, 512, 1024, 2048],
+#     [corda_key_gen],
+#     "VAULT",
+# )
 
-bench_and_plot(
-    [256, 512, 1024, 2048],
-    [
-        corda_key_gen,
-        lirs_key_gen,
-        lirs_key_gen,
-        lirs_key_gen,
-        lirs_key_gen,
-        lirs_key_gen,
-        corda_key_gen,
-    ],
-    "MIX",
-)
+# bench_and_plot(
+#     [256, 512, 1024, 2048],
+#     [
+#         corda_key_gen,
+#         lirs_key_gen,
+#         lirs_key_gen,
+#         lirs_key_gen,
+#         lirs_key_gen,
+#         lirs_key_gen,
+#         corda_key_gen,
+#     ],
+#     "MIX",
+# )
 
-bench_and_plot(
-    [20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
+bench_and_plot_parallel(
+    [500, 1000, 1500, 2000],
     [oracle_general_gen],
-    "WIKI CDN",
+    "Twitter Cluster 52",
 )
