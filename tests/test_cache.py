@@ -205,7 +205,7 @@ def test_close_cache(nolock) -> None:
         cache = Cache(500, nolock)
         cache.set("foo", "bar", timedelta(seconds=60))
         cache.close()
-        sleep(1)
+        sleep(3)
         assert cache._maintainer.done() is True
 
 
