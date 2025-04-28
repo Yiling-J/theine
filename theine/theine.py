@@ -446,6 +446,7 @@ class Cache(Generic[KT, VT]):
             r = fn()
             ttl_ns = self._ttl_nano(self._ttl)
             shard._set_nolock(key, kh, r, ttl_ns)
+            self._write_buffer.add(kh, ttl_ns)
             return r
 
         event = EventData(Event(), None)

@@ -470,9 +470,13 @@ def test_cocurrency_load() -> None:
                 raise exception
     print("==== done ====", len(read_auto_key._cache))
 
-def test_sync_decorator_zipf_correctness() -> None:
+@pytest.fixture(params=[True, False])
+def nolock(request):
+    return request.param
+
+def test_sync_decorator_zipf_correctness(nolock) -> None:
     for size in [500, 2000, 10000, 50000]:
-        @Memoize(size, ttl=None)
+        @Memoize(size, ttl=None, nolock=nolock)
         def read(key: int) -> int:
             return key
 

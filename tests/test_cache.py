@@ -2,6 +2,7 @@ import sysconfig
 import sys
 import threading
 import time
+import pytest
 from datetime import timedelta
 from random import randint
 from time import sleep
@@ -14,8 +15,12 @@ from theine.theine import Cache
 is_freethreaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 
-def test_set() -> None:
-    cache = Cache(100)
+@pytest.fixture(params=[True, False])
+def nolock(request):
+    return request.param
+
+def test_set(nolock) -> None:
+    cache = Cache(100, nolock)
     for i in range(20):
         key = f"key:{i}"
         cache.set(key, key)
@@ -44,8 +49,8 @@ def test_set() -> None:
     assert len(cache) == 100
 
 
-def test_set_cache_size() -> None:
-    cache = Cache(500)
+def test_set_cache_size(nolock) -> None:
+    cache = Cache(500, nolock)
     for _ in range(100000):
         i = randint(0, 100000)
         cache.set(f"key:{i}", i)
@@ -53,8 +58,8 @@ def test_set_cache_size() -> None:
     assert len(cache) == 500
 
 
-def test_set_with_ttl() -> None:
-    cache = Cache(500)
+def test_set_with_ttl(nolock) -> None:
+    cache = Cache(500, nolock)
     for i in range(30):
         key = f"key:{i}"
         cache.set(key, key, timedelta(seconds=i + 1))
@@ -79,10 +84,10 @@ def test_set_with_ttl() -> None:
         assert ok
 
 
-def test_set_with_ttl_multi_instances() -> None:
+def test_set_with_ttl_multi_instances(nolock) -> None:
     caches = []
     for i in range(30):
-        caches.append(Cache(500))
+        caches.append(Cache(500, nolock))
 
     for cache in caches:
         for i in range(30):
@@ -108,8 +113,8 @@ class SameHash:
         return other == self.i
 
 
-def test_collision() -> None:
-    cache = Cache(500)
+def test_collision(nolock) -> None:
+    cache = Cache(500, nolock)
     for i in range(30):
         e = SameHash(i)
         cache.set(e, e, timedelta(seconds=i + 5))
@@ -122,8 +127,8 @@ def test_collision() -> None:
     assert obj.i == 29
 
 
-def test_delete() -> None:
-    cache = Cache(100)
+def test_delete(nolock) -> None:
+    cache = Cache(100, nolock)
     for i in range(20):
         key = f"key:{i}"
         cache.set(key, key)
@@ -139,8 +144,8 @@ class Foo:
         self.id = id
 
 
-def test_hashable_key() -> None:
-    cache = Cache(100)
+def test_hashable_key(nolock) -> None:
+    cache = Cache(100, nolock)
     foos = [Foo(i) for i in range(20)]
     for foo in foos:
         cache.set(foo, foo)
@@ -152,8 +157,8 @@ def test_hashable_key() -> None:
     assert not ok
 
 
-def test_set_with_ttl_hashable() -> None:
-    cache = Cache(500)
+def test_set_with_ttl_hashable(nolock) -> None:
+    cache = Cache(500, nolock)
     foos = [Foo(i) for i in range(30)]
     for i in range(30):
         cache.set(foos[i], foos[i], timedelta(seconds=i + 1))
@@ -170,8 +175,8 @@ def test_set_with_ttl_hashable() -> None:
             break
 
 
-def test_expire_proactively() -> None:
-    cache = Cache(50000)
+def test_expire_proactively(nolock) -> None:
+    cache = Cache(50000, nolock)
     for i in range(50000):
         cache.set((i, 2), i, timedelta(seconds=randint(5, 10)))
     current = 50000
@@ -184,8 +189,8 @@ def test_expire_proactively() -> None:
             break
 
 
-def test_clear_cache() -> None:
-    cache = Cache(500)
+def test_clear_cache(nolock) -> None:
+    cache = Cache(500, nolock)
     for i in range(5000):
         cache.set((i, 2), i, timedelta(seconds=randint(5, 10)))
     sleep(1)
@@ -195,17 +200,17 @@ def test_clear_cache() -> None:
     assert cache.core.len() == 0
 
 
-def test_close_cache() -> None:
+def test_close_cache(nolock) -> None:
     for _ in range(10):
-        cache = Cache(500)
+        cache = Cache(500, nolock)
         cache.set("foo", "bar", timedelta(seconds=60))
         cache.close()
         sleep(1)
         assert cache._maintainer.done() is True
 
 
-def test_cache_stats() -> None:
-    cache = Cache(5000)
+def test_cache_stats(nolock) -> None:
+    cache = Cache(5000, nolock)
     assert cache.max_size == 5000
     assert len(cache) == 0
     z = Zipf(1.0001, 10, 20000)
@@ -231,9 +236,9 @@ def zipf_key_gen(total):
         yield z.get()
 
 
-def test_zipf() -> None:
+def test_zipf(nolock) -> None:
     miss = 0
-    cache = Cache(50000)
+    cache = Cache(50000, nolock)
     for key in zipf_key_gen(10000000):
         v = cache.get(key)
         if v[1]:
@@ -246,9 +251,9 @@ def test_zipf() -> None:
     assert 1 - (miss / 10000000) > 0.5 and 1 - (miss / 10000000) < 0.6
 
 
-def test_zipf_correctness() -> None:
+def test_zipf_correctness(nolock) -> None:
     for size in [500, 2000, 10000, 50000]:
-        cache = Cache(size)
+        cache = Cache(size, nolock)
         for key in zipf_key_gen(1000000):
             v = cache.get(key)
             if v[1]:
