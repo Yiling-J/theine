@@ -51,7 +51,7 @@ cache.set("key", {"foo": "bar"}, ttl=timedelta(seconds=100))
 ```
 
 #### Thread Safety by Default
-In V2, both the `Cache` class and the `Memoize` decorator are thread-safe by default. However, if you're not using Theine in a multi-threaded environment, you can disable the locking mechanism. However for free-threaded Python build, **`nolock` will always be `False`, even if set to `True` here.** This is because Theine internally uses an extra thread for proactive expiry, so at least two threads are active, and thus `nolock` must remain `False`.
+In V2, both the `Cache` class and the `Memoize` decorator are thread-safe by default. However, if you're not using Theine in a multi-threaded environment, you can disable the locking mechanism. **However for free-threaded Python build, `nolock` will always be `False`, even if set to `True` here.** This is because Theine internally uses an extra thread for proactive expiry, so at least two threads are active, and thus `nolock` must remain `False`.
 ```python
 cache = Cache(10000, nolock=True)
 
