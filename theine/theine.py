@@ -2,6 +2,7 @@ import os
 import asyncio
 import inspect
 import time
+import sysconfig
 from dataclasses import dataclass
 from datetime import timedelta
 from threading import Lock, Event, Thread
@@ -370,6 +371,8 @@ class Cache(Generic[KT, VT]):
     _ttl: Optional[timedelta]
 
     def __init__(self, size: int, nolock: bool = False):
+        if bool(sysconfig.get_config_var("Py_GIL_DISABLED")):
+            nolock = False
         shard_count = round_up_power_of_2(os.cpu_count() or 4)
 
         if shard_count < 16:
