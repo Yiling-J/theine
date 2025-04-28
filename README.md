@@ -206,8 +206,6 @@ The Rust core uses only the key hash, so the actual key size does not affect mem
 
 ## Benchmarks
 
-### throughput
-
 ### hit ratios
 
 **zipf**
@@ -228,6 +226,16 @@ The Rust core uses only the key hash, so the actual key size does not affect mem
 **Twitter Cache**
 
 ![hit ratios](benchmarks/twitter-c52s10.png)
+
+### throughput
+
+cpu: aliyun, 32 vCPU, Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz
+
+Python 3.13.3t
+
+reads=100%, 1-32 threads
+
+![throughput](benchmarks/read_throughput.png)
 
 ## Support
 Feel free to open an issue or ask question in discussions.
