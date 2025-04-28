@@ -43,7 +43,7 @@ def oracle_general_gen(name: str) -> Iterator:
     if name == "WIKI CDN":
         path = "benchmarks/trace/wiki_2019t.oracleGeneral.zst"
     if name == "Twitter Cluster 52":
-        path = "/Volumes/CCCOMA_X64FRE_ZH-CN_DV9/cluster52.oracleGeneral.sample10.zst"
+        path = "benchmarks/trace/cluster52.oracleGeneral.sample10.zst"
     with open(path, "rb") as f:
         dctx = zstd.ZstdDecompressor()
         with dctx.stream_reader(f) as reader:
@@ -270,74 +270,74 @@ def bench_and_plot_parallel(caps, key_gens, name):
 
 # infinit_run(50000)
 
-# bench_and_plot(
-#     [500, 1000, 2000, 5000, 10_000, 20_000, 40_000, 80_000], [zipf_key_gen], "Zipf"
-# )
-# bench_and_plot(
-#     [
-#         1_000_000,
-#         2_000_000,
-#         3_000_000,
-#         4_000_000,
-#         5_000_000,
-#         6_000_000,
-#         7_000_000,
-#         8_000_000,
-#     ],
-#     [arc_key_gen],
-#     "DS1",
-# )
-# bench_and_plot(
-#     [100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000],
-#     [arc_key_gen],
-#     "S3",
-# )
+bench_and_plot(
+    [500, 1000, 2000, 5000, 10_000, 20_000, 40_000, 80_000], [zipf_key_gen], "Zipf"
+)
+bench_and_plot(
+    [
+        1_000_000,
+        2_000_000,
+        3_000_000,
+        4_000_000,
+        5_000_000,
+        6_000_000,
+        7_000_000,
+        8_000_000,
+    ],
+    [arc_key_gen],
+    "DS1",
+)
+bench_and_plot(
+    [100_000, 200_000, 300_000, 400_000, 500_000, 600_000, 700_000, 800_000],
+    [arc_key_gen],
+    "S3",
+)
 
-# bench_and_plot(
-#     [25_000, 50_000, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000],
-#     [arc_key_gen],
-#     "P3",
-# )
+bench_and_plot(
+    [25_000, 50_000, 100_000, 200_000, 300_000, 400_000, 500_000, 600_000],
+    [arc_key_gen],
+    "P3",
+)
 
-# bench_and_plot(
-#     [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
-#     [arc_key_gen],
-#     "P8",
-# )
+bench_and_plot(
+    [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000],
+    [arc_key_gen],
+    "P8",
+)
 
-# bench_and_plot(
-#     [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
-#     [arc_key_gen],
-#     "OLTP",
-# )
+bench_and_plot(
+    [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
+    [arc_key_gen],
+    "OLTP",
+)
 
-# bench_and_plot(
-#     [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
-#     [lirs_key_gen],
-#     "LIRS",
-# )
+bench_and_plot(
+    [250, 500, 750, 1000, 1250, 1500, 1750, 2000],
+    [lirs_key_gen],
+    "LIRS",
+)
 
-# bench_and_plot(
-#     [256, 512, 1024, 2048],
-#     [corda_key_gen],
-#     "VAULT",
-# )
+bench_and_plot(
+    [256, 512, 1024, 2048],
+    [corda_key_gen],
+    "VAULT",
+)
 
-# bench_and_plot(
-#     [256, 512, 1024, 2048],
-#     [
-#         corda_key_gen,
-#         lirs_key_gen,
-#         lirs_key_gen,
-#         lirs_key_gen,
-#         lirs_key_gen,
-#         lirs_key_gen,
-#         corda_key_gen,
-#     ],
-#     "MIX",
-# )
+bench_and_plot(
+    [256, 512, 1024, 2048],
+    [
+        corda_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        lirs_key_gen,
+        corda_key_gen,
+    ],
+    "MIX",
+)
 
-bench_and_plot_parallel(
+bench_and_plot(
     [500, 1000, 1500, 2000],
     [oracle_general_gen],
     "Twitter Cluster 52",
