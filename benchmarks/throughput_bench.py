@@ -1,29 +1,20 @@
 from threading import Thread, Lock
-from theine.v2 import Cache
+from theine import Cache, Memoize
 from bounded_zipf import Zipf
 import time
 import random
 from datetime import timedelta
+from cachetools import LRUCache, cached
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.interpolate import PchipInterpolator
 
-# The multi-threading benchmark results are not meaningful for a GIL-enabled build
-# because cache Get/Set operations are CPU-intensive, and multi-threading performance
-# is heavily constrained by the GIL.
-# Currently, the multi-threading benchmark is also of limited value for a no GIL build,
-# as the scalability of CPython without the GIL remains unclear. For instance, will
-# there be contention caused by reference counting when accessing the global variable
-# CACHE_SIZE across threads? The same concern applies to functions and methods.
-# Accurate multi-threading throughput benchmarks cannot be achieved through assumptions
-# and guesses; proper evaluation will require official documentation from CPython
-# on no GIL scalability.
-
-
-CACHE_SIZE = 100_000
 CPU = 6
-DATA_LEN = 2 << 14
+DATA_LEN = 2 << 15
 
 
 def key_gen():
-    z = Zipf(1.0001, 9, CACHE_SIZE * 100)
+    z = Zipf(1.0001, 9, DATA_LEN)
     keys = []
     i = 0
     while i < DATA_LEN:
@@ -33,27 +24,49 @@ def key_gen():
     return keys
 
 
-def bench_run(client, tp, reporter=None):
-    keys = key_gen()
+def bench_run(index, fn, tp, reporter=None, keys=[]):
+    if len(keys) == 0:
+        keys = key_gen()
+    else:
+        keys = keys[:]
 
     start = random.randint(0, DATA_LEN - 1)
     s = time.monotonic_ns()
 
-    for i in range(500000):
+    for i in range(DATA_LEN):
         if tp == 0:
-            client.get(keys[(i + start) & DATA_LEN - 1])
+            fn(keys[(i + start) & DATA_LEN - 1])
         else:
-            client.set(keys[(i + start) & DATA_LEN - 1], 1, timedelta(hours=1))
+            fn(index * DATA_LEN + i)
 
     dt = time.monotonic_ns() - s
     if reporter is None:
-        nop = dt / 500000
+        nop = dt / DATA_LEN
         print(f"single thread {'read' if tp==0 else 'write'}: {nop:.2f} ns/op")
     else:
-        reporter(500000)
+        reporter(DATA_LEN)
 
 
-def bench_run_parallel(r, w, runner):
+def bench_run_parallel(r, w, tp):
+    if tp == "theine":
+            @Memoize(DATA_LEN * 2, None)
+            def get(key):
+                return key
+
+            @get.key
+            def k(key):
+                return str(key)
+    elif tp == "cachetools":
+        @cached(cache=LRUCache(maxsize=DATA_LEN * 2), lock=Lock())
+        def get(key):
+            return key
+
+    keys = key_gen()
+    for k in keys:
+        get(k)
+        get(k)
+        get(k)
+
     tl = []
 
     count_sum = 0
@@ -67,7 +80,7 @@ def bench_run_parallel(r, w, runner):
 
     s = time.monotonic_ns()
     for i in range(r + w):
-        t = Thread(target=bench_run, args=[client, 0 if i < r else 1, report])
+        t = Thread(target=bench_run, args=[i, get, 0 if i < r else 1, report, keys])
         tl.append(t)
         t.start()
 
@@ -77,26 +90,43 @@ def bench_run_parallel(r, w, runner):
 
     nop = dt / count_sum
     print(f"read-{r} write-{w}: {nop:.2f} ns/op")
+    return 1 / nop * 1e9
 
+
+def init_plot(title):
+    fig, ax = plt.subplots()
+    ax.set_xlabel("threads")
+    ax.set_ylabel("ops/s")
+    ax.set_title(title)
+    fig.set_figwidth(12)
+    return fig, ax
+
+def bench_and_plot(parallel, name):
+    x = []
+    y_theine = []
+    y_cachetools = []
+
+    for p in parallel:
+        x.append(p)
+        y_theine.append(bench_run_parallel(p, 0, "theine"))
+        y_cachetools.append(bench_run_parallel(p, 0, "cachetools"))
+
+    fig, ax = init_plot("Read Throughput")
+    # Smooth the lines using np.interp for interpolation
+    x_new = np.linspace(min(x), max(x), 300)
+
+    theine_spl = PchipInterpolator(x, y_theine)
+    cachetools_spl = PchipInterpolator(x, y_cachetools)
+    y_theine_smooth = theine_spl(x_new)
+    y_cachetools_smooth = cachetools_spl(x_new)
+
+    ax.plot(x_new, y_theine_smooth, "b-", label="theine")
+    ax.plot(x_new, y_cachetools_smooth, "r-", label="cachetools")
+    ax.plot(x, y_theine, "bo")
+    ax.plot(x, y_cachetools, "ro")
+
+    ax.legend()
+    fig.savefig(f"benchmarks/{name.lower()}.png", dpi=200)
 
 if __name__ == "__main__":
-    client = Cache(CACHE_SIZE)
-    keys = key_gen()
-    for k in keys:
-        client.set(k, 1, timedelta(hours=1))
-
-    # read only single thread
-    bench_run(client, 0)
-
-    # write only single thread
-    bench_run(client, 1)
-
-    # read only multi threaded
-    bench_run_parallel(CPU, 0, client)
-
-    # write only multi threaded
-    bench_run_parallel(0, CPU, client)
-
-    # 75% read multi threaded
-    rc = int(CPU * 0.75)
-    bench_run_parallel(rc, CPU - rc, client)
+    bench_and_plot([1,2,4,8,12,16,20,26,32], "read_throughput")
