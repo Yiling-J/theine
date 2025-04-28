@@ -14,9 +14,15 @@ classifiers = [
 dependencies = [
     "typing-extensions>=4.4.0,<5",
     "theine-core",
+    "zstandard>=0.24.0.dev0",
 ]
 
 [dependency-groups]
+bench = [
+    "matplotlib>=3.9.4",
+    "scipy>=1.13.1",
+    "zstandard>=0.24.0.dev0",
+]
 dev = [
     "pytest>=7.2.1,<8",
     "pytest-benchmark>=4.0.0,<5",
@@ -38,6 +44,7 @@ dev = [
 
 [tool.uv.sources]
 theine-core = { git = "https://github.com/Yiling-J/theine-core.git", branch = "v2" }
+zstandard = {git="https://github.com/dpdani/python-zstandard.git", branch="feature/3.13t" }
 
 [build-system]
 requires = ["hatchling"]
