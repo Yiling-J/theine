@@ -1,3 +1,5 @@
+import sysconfig
+import sys
 import threading
 import time
 from datetime import timedelta
@@ -8,6 +10,8 @@ from contextlib import nullcontext
 from bounded_zipf import Zipf  # type: ignore[import]
 
 from theine.theine import Cache
+
+is_freethreaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 
 def test_set() -> None:
@@ -251,6 +255,39 @@ def test_zipf_correctness() -> None:
                 assert key == v[0]
             else:
                 cache.set(key, key)
+        cache._force_drain_write()
+        total = 0
+        for shard in cache._shards:
+            total += len(shard._map)
+        info = cache.core.debug_info()
+        assert total == info.len
+        assert info.window_len + info.probation_len + info.protected_len == total
+
+
+def test_zipf_correctness_parallel() -> None:
+    def run(client):
+        if is_freethreaded:
+            assert sys._is_gil_enabled() == False
+
+        keys = list(zipf_key_gen(500000))
+        for key in keys:
+            v = client.get(key)
+            if v[1]:
+                assert key == v[0]
+            else:
+                client.set(key, key)
+
+    for size in [500, 2000, 10000, 50000]:
+        cache = Cache(size)
+        threads = []
+        for start in range(4):
+            thread = threading.Thread(target=run, args=[cache])
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
         cache._force_drain_write()
         total = 0
         for shard in cache._shards:

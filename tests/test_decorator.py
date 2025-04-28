@@ -1,3 +1,5 @@
+import sysconfig
+import sys
 import asyncio
 import concurrent.futures
 from datetime import timedelta
@@ -13,6 +15,8 @@ from bounded_zipf import Zipf  # type: ignore[import]
 from theine.theine import Memoize
 
 EXCEPTION_THROWING_CACHE_TTL = timedelta(seconds=3)
+
+is_freethreaded = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
 
 
 @Memoize(1000, None)
@@ -451,6 +455,11 @@ def assert_read_key(n: int) -> None:
     print(".", end="")
 
 
+def zipf_key_gen(total):
+    z = Zipf(1.01, 9.0, 50000 * 1000)
+    for _ in range(total):
+        yield z.get()
+
 def test_cocurrency_load() -> None:
     z = Zipf(1.0001, 10, 5000000)
     with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
@@ -460,3 +469,55 @@ def test_cocurrency_load() -> None:
             if exception:
                 raise exception
     print("==== done ====", len(read_auto_key._cache))
+
+def test_sync_decorator_zipf_correctness() -> None:
+    for size in [500, 2000, 10000, 50000]:
+        @Memoize(size, ttl=None)
+        def read(key: int) -> int:
+            return key
+
+        for key in zipf_key_gen(1000000):
+            v = read(key)
+            assert key == v
+
+        cache = read._cache
+        cache._force_drain_write()
+        total = 0
+        for shard in cache._shards:
+            total += len(shard._map)
+        info = cache.core.debug_info()
+        assert total == info.len
+        assert info.window_len + info.probation_len + info.protected_len == total
+
+def test_sync_decorator_zipf_correctness_parallel() -> None:
+    def run(read):
+        if is_freethreaded:
+            assert sys._is_gil_enabled() == False
+
+        keys = list(zipf_key_gen(500000))
+        for key in keys:
+            v = read(key)
+            assert key == v
+
+    for size in [500, 2000, 10000, 50000]:
+        @Memoize(size, ttl=None)
+        def read(key: int) -> int:
+            return key
+
+        threads = []
+        for start in range(4):
+            thread = Thread(target=run, args=[read])
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        cache = read._cache
+        cache._force_drain_write()
+        total = 0
+        for shard in cache._shards:
+            total += len(shard._map)
+        info = cache.core.debug_info()
+        assert total == info.len
+        assert info.window_len + info.probation_len + info.protected_len == total
