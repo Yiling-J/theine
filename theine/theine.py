@@ -437,12 +437,12 @@ class Cache(Generic[KT, VT]):
 
     def _get_or_compute(self, key: KT, fn: Callable[[], VT]) -> VT:
         kh = spread(hash(key))
-        (v, ok) = self._shards[kh & (self._shard_count - 1)].get(key, kh)
+        shard = self._shards[kh & (self._shard_count - 1)]
+        (v, ok) = shard.get(key, kh)
         if ok:
             self._read_buffer.add(kh)
             return cast(VT, v)
 
-        shard = self._shards[kh & (self._shard_count - 1)]
         # nolock means single threading mode,
         # where cache stampe problem not exists
         if self._nolock:

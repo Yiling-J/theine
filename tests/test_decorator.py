@@ -474,6 +474,25 @@ def test_cocurrency_load() -> None:
 def nolock(request):
     return request.param
 
+def test_sync_decorator_zipf(nolock) -> None:
+    miss = 0
+
+    @Memoize(50000, ttl=None, nolock=nolock)
+    def read(key: int) -> int:
+        nonlocal miss
+        miss += 1
+        return key
+
+    for key in zipf_key_gen(2000000):
+        v = read(key)
+        assert key == v
+
+    cache = read._cache
+    cache._force_drain_write()
+    stats = cache.stats()
+    assert stats.hit_rate > 0.5 and stats.hit_rate < 0.6
+    assert 1 - (miss / 2000000) > 0.5 and 1 - (miss / 2000000) < 0.6
+
 def test_sync_decorator_zipf_correctness(nolock) -> None:
     for size in [500, 2000, 10000, 50000]:
         @Memoize(size, ttl=None, nolock=nolock)

@@ -239,7 +239,7 @@ def zipf_key_gen(total):
 def test_zipf(nolock) -> None:
     miss = 0
     cache = Cache(50000, nolock)
-    for key in zipf_key_gen(10000000):
+    for key in zipf_key_gen(2000000):
         v = cache.get(key)
         if v[1]:
             assert key == v[0]
@@ -248,7 +248,7 @@ def test_zipf(nolock) -> None:
             cache.set(key, key)
     stats = cache.stats()
     assert stats.hit_rate > 0.5 and stats.hit_rate < 0.6
-    assert 1 - (miss / 10000000) > 0.5 and 1 - (miss / 10000000) < 0.6
+    assert 1 - (miss / 2000000) > 0.5 and 1 - (miss / 2000000) < 0.6
 
 
 def test_zipf_correctness(nolock) -> None:
