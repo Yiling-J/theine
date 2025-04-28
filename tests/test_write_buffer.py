@@ -60,7 +60,8 @@ def test_write_buffer_multithreaded() -> None:
 
     m = {}
     for i in cq:
-        m[i[0][0]] = True
+        for j in i:
+            m[j[0]] = True
     assert len(m) == 40
     l = list(m.keys())
     l.sort()
