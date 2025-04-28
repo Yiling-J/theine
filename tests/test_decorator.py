@@ -490,6 +490,7 @@ def test_sync_decorator_zipf(nolock) -> None:
     cache = read._cache
     cache._force_drain_write()
     stats = cache.stats()
+    assert stats.request_count == 2000000
     assert stats.hit_rate > 0.5 and stats.hit_rate < 0.6
     assert 1 - (miss / 2000000) > 0.5 and 1 - (miss / 2000000) < 0.6
 

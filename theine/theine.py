@@ -244,6 +244,19 @@ class Shard(Generic[KT, VT]):
             if not self._nolock:
                 self._mutex.release()
 
+    # used only in the cache decorator. self._hits and self._misses are not updated here, as those values are recorded when entering the decorator
+    def _get_nolock(self, key: KT, key_hash: int) -> Tuple[Optional[VT], bool]:
+        try:
+            entry = self._map[key]
+            if entry.expire > 0 and entry.expire <= time.monotonic_ns():
+                self._map.pop(key, sentinel)
+                self._key_map.pop(key_hash, sentinel)
+                return (None, False)
+            else:
+                return (entry.value, True)
+        except KeyError:
+            return (None, False)
+
     def _set_nolock(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
         # remove exist first if key hash collision
         # not policy update because same hash means same key in policy
@@ -454,6 +467,11 @@ class Cache(Generic[KT, VT]):
 
         event = EventData(Event(), None)
         with shard._mutex:
+            # check key exists again, because other threads might set the value already
+            (v, ok) = shard._get_nolock(key, kh)
+            if ok:
+                self._read_buffer.add(kh)
+                return cast(VT, v)
             ve = self._events.setdefault(key, event)
         # the shard mutex is released when computing value for the key,
         # so following get on same key can wait for the event.
@@ -462,9 +480,10 @@ class Cache(Generic[KT, VT]):
         if ve is event:
             result_sync = fn()
             event.data = result_sync
-            self._events.pop(key, None)
             ttl_ns = self._ttl_nano(self._ttl)
-            shard.set(key, kh, result_sync, ttl_ns)
+            with shard._mutex:
+                shard._set_nolock(key, kh, result_sync, ttl_ns)
+                self._events.pop(key, None)
             event.event.set()
             self._write_buffer.add(kh, ttl_ns)
         else:
