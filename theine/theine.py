@@ -1,49 +1,39 @@
-import os
 import asyncio
 import inspect
-import time
+import itertools
+import os
 import sysconfig
+import time
 from dataclasses import dataclass
 from datetime import timedelta
-from threading import Lock, Event, Thread
 from functools import _make_key, update_wrapper
+from threading import Event, Lock, Thread
 from typing import (
     Any,
     Awaitable,
     Callable,
     Dict,
+    Generic,
     Hashable,
     List,
-    Tuple,
     Optional,
-    TYPE_CHECKING,
     Tuple,
-    Type,
     TypeVar,
-    Union,
     cast,
-    overload,
     no_type_check,
-    Generic,
+    overload,
 )
 
-from mypy_extensions import KwArg, VarArg
 from theine_core import TlfuCore, spread
-from typing_extensions import ParamSpec, Protocol, Concatenate
+from typing_extensions import Concatenate, ParamSpec, Protocol
 
-
-from theine.exceptions import InvalidTTL
-from theine.models import CacheStats, Entry, KT, VT
+from theine.models import KT, VT, CacheStats, Entry
 from theine.striped_buffer import StripedBuffer
-from theine.write_buffer import WriteBuffer
 from theine.utils import round_up_power_of_2
-import itertools
-
+from theine.write_buffer import WriteBuffer
 
 S = TypeVar("S", contravariant=True)
 P = ParamSpec("P")
-if TYPE_CHECKING:
-    from functools import _Wrapped
 
 sentinel = object()
 
@@ -348,7 +338,7 @@ class Shard(Generic[KT, VT]):
                 pass
             else:
                 try:
-                    entry = self._map[key]
+                    self._map[key]
                 except KeyError:
                     pass
                 else:

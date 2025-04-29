@@ -5,7 +5,7 @@ from threading import Lock, Thread
 import matplotlib.pyplot as plt
 import numpy as np
 from bounded_zipf import Zipf
-from cachetools import LRUCache, cached
+from cachetools import TTLCache, cached
 from scipy.interpolate import PchipInterpolator
 
 from theine import Memoize
@@ -58,7 +58,7 @@ def bench_run_parallel(r, w, tp):
             def k(key):
                 return str(key)
     elif tp == "cachetools":
-        @cached(cache=LRUCache(maxsize=DATA_LEN * 2), lock=Lock())
+        @cached(cache=TTLCache(maxsize=DATA_LEN * 2, ttl=20000), lock=Lock())
         def get(key):
             return key
 
@@ -93,6 +93,43 @@ def bench_run_parallel(r, w, tp):
     print(f"read-{r} write-{w}: {nop:.2f} ns/op")
     return 1 / nop * 1e9
 
+
+def bench_run_nolock(tp):
+    if tp == "theine":
+            @Memoize(DATA_LEN * 2, None, nolock=True)
+            def get(key):
+                return key
+
+            @get.key
+            def k(key):
+                return str(key)
+    elif tp == "cachetools":
+        @cached(cache=TTLCache(maxsize=DATA_LEN * 2, ttl=20000), info=True)
+        def get(key):
+            return key
+
+    keys = key_gen()
+    for k in keys:
+        get(k)
+        get(k)
+        get(k)
+
+    count_sum = 0
+    mu = Lock()
+
+    def report(count):
+        nonlocal count_sum
+
+        with mu:
+            count_sum += count
+
+    s = time.monotonic_ns()
+    bench_run(0, get, 0, report, keys)
+    dt = time.monotonic_ns() - s
+    nop = dt / count_sum
+    ops = 1 / nop * 1e9
+    print(f"{tp} 100% read: {nop} ns/op {ops} ops/s")
+    return 1 / nop * 1e9
 
 def init_plot(title):
     fig, ax = plt.subplots()
@@ -129,5 +166,11 @@ def bench_and_plot(parallel, name):
     ax.legend()
     fig.savefig(f"benchmarks/{name.lower()}.png", dpi=200)
 
+
+def bench_and_plot_nolock(name):
+    bench_run_nolock("theine")
+    bench_run_nolock("cachetools")
+
 if __name__ == "__main__":
+    bench_and_plot_nolock("read_throughput")
     bench_and_plot([1,2,4,8,12,16,20,26,32], "read_throughput")
