@@ -6,7 +6,7 @@ High performance in-memory cache inspired by [Caffeine](https://github.com/ben-m
 - High hit ratio with adaptive [W-TinyLFU](https://arxiv.org/pdf/1512.00727.pdf) eviction policy
 - Expired data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
 - Fully typed
-- Thread-safe
+- Thread-safe with Free-Threading support (tested on Python 3.13.3t)
 - Django cache backend
 
 ## Theine V2 Migration Guide
@@ -163,6 +163,10 @@ def _(a:int) -> str:
 
 await foo_a(1)
 
+# get current cache stats, please call stats() again if you need updated stats
+stats = foo.cache_stats()
+print(stats.request_count, stats.hit_count, stats.hit_rate)
+
 ```
 
 **- auto key function**
@@ -208,6 +212,8 @@ The Rust core uses only the key hash, so the actual key size does not affect mem
 
 ### hit ratios
 
+Source Code: [trace_bench.py](benchmarks/trace_bench.py)
+
 **zipf**
 
 ![hit ratios](benchmarks/zipf.png)
@@ -229,7 +235,9 @@ The Rust core uses only the key hash, so the actual key size does not affect mem
 
 ### throughput
 
-cpu: aliyun, 32 vCPU, Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz
+Source Code: [throughput_bench.py](benchmarks/throughput_bench.py)
+
+CPU: aliyun, 32 vCPU, Intel(R) Xeon(R) Platinum 8163 CPU @ 2.50GHz
 
 Python 3.13.3t
 
