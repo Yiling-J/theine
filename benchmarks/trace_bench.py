@@ -1,19 +1,18 @@
+import concurrent.futures
 import gzip
 import struct
-import os
 from datetime import timedelta
 from random import randint
 from typing import Callable, Iterator, List
 
-import zstandard as zstd
 import matplotlib.pyplot as plt
-from bounded_zipf import Zipf
-from theine import Cache
-from cachetools import LRUCache, FIFOCache
 import numpy as np
+import zstandard as zstd
+from bounded_zipf import Zipf
+from cachetools import FIFOCache, LRUCache
 from scipy.interpolate import PchipInterpolator
-import concurrent.futures
 
+from theine import Cache
 
 plt.style.use("ggplot")
 
@@ -217,7 +216,6 @@ def bench_and_plot_parallel(caps, key_gens, name):
     y_cachetools_lru = []
     y_cachetools_fifo = []
 
-    threads = []
     futures = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         for cap in caps:

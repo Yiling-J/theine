@@ -1,13 +1,14 @@
-from threading import Thread, Lock
-from theine import Cache, Memoize
-from bounded_zipf import Zipf
-import time
 import random
-from datetime import timedelta
-from cachetools import LRUCache, cached
+import time
+from threading import Lock, Thread
+
 import matplotlib.pyplot as plt
 import numpy as np
+from bounded_zipf import Zipf
+from cachetools import LRUCache, cached
 from scipy.interpolate import PchipInterpolator
+
+from theine import Memoize
 
 CPU = 6
 DATA_LEN = 2 << 15

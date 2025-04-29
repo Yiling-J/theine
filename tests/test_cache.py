@@ -1,13 +1,11 @@
-import sysconfig
 import sys
+import sysconfig
 import threading
-import time
-import pytest
 from datetime import timedelta
 from random import randint
 from time import sleep
-from contextlib import nullcontext
 
+import pytest
 from bounded_zipf import Zipf  # type: ignore[import]
 
 from theine.theine import Cache
@@ -268,12 +266,17 @@ def test_zipf_correctness(nolock) -> None:
         info = cache.core.debug_info()
         assert total == info.len
         assert info.window_len + info.probation_len + info.protected_len == total
+        keys = cache.core.keys()
+        assert len(keys) == total
+        for kh in cache.core.keys():
+            idx = kh & (cache._shard_count - 1)
+            assert kh in cache._shards[idx]._key_map
 
 
 def test_zipf_correctness_parallel() -> None:
     def run(client):
         if is_freethreaded:
-            assert sys._is_gil_enabled() == False
+            assert sys._is_gil_enabled() is False
 
         keys = list(zipf_key_gen(500000))
         for key in keys:
@@ -301,3 +304,8 @@ def test_zipf_correctness_parallel() -> None:
         info = cache.core.debug_info()
         assert total == info.len
         assert info.window_len + info.probation_len + info.protected_len == total
+        keys = cache.core.keys()
+        assert len(keys) == total
+        for kh in cache.core.keys():
+            idx = kh & (cache._shard_count - 1)
+            assert kh in cache._shards[idx]._key_map
