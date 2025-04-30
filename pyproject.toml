@@ -22,6 +22,7 @@ bench = [
     "matplotlib>=3.9.4",
     "scipy>=1.13.1",
     "zstandard>=0.24.0.dev0",
+    "theine-core>=2.0.0rc1,<3"
 ]
 dev = [
     "pytest>=7.2.1,<8",
@@ -43,7 +44,6 @@ dev = [
 [tool.uv]
 
 [tool.uv.sources]
-theine-core = { git = "https://github.com/Yiling-J/theine-core.git", branch = "v2" }
 zstandard = {git="https://github.com/dpdani/python-zstandard.git", branch="feature/3.13t" }
 
 [build-system]
