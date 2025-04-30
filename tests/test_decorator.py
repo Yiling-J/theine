@@ -412,6 +412,7 @@ def test_ttl_auto_key() -> None:
         current = len(foo_to._cache)
         if current == 0:
             break
+    assert len(foo_to_auto._cache.core.keys()) == 0
 
 
 def test_cache_full_evict() -> None:

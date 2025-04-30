@@ -185,6 +185,7 @@ def test_expire_proactively(nolock) -> None:
         current = len(cache)
         if current == 0:
             break
+    assert len(cache.core.keys()) == 0
 
 
 def test_clear_cache(nolock) -> None:
