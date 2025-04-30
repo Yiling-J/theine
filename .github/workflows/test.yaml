@@ -1,4 +1,3 @@
----
 name: Tests
 
 on:
@@ -9,6 +8,10 @@ on:
       - typing
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'reason'
 
 jobs:
   tests:
