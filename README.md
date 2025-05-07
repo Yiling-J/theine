@@ -63,6 +63,9 @@ In V1, there was a `lock` parameter used to prevent cache stampede. In V2, this 
 #### Single Expiration Handling Thread for All Cache Instances
 In V2, instead of each cache instance using a separate thread for proactive expiration (as in V1), a single thread will be used to handle expirations for all cache instances via `asyncio`. This improves efficiency and scalability.
 
+#### Improved Adaptive Cache Eviction Policy
+The improved adaptive cache eviction policy automatically switches between LRU and LFU strategies to achieve a higher hit ratio across diverse workloads. See [hit ratios](#hit-ratios) for results based on many widely used trace data.
+
 ## Table of Contents
 
 - [Requirements](#requirements)
