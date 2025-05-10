@@ -1,118 +1,52 @@
 import asyncio
 import inspect
 import itertools
+import os
+import sysconfig
 import time
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import _make_key, update_wrapper
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from typing import (
     Any,
     Awaitable,
     Callable,
     Dict,
+    Generic,
     Hashable,
     List,
     Optional,
-    TYPE_CHECKING,
     Tuple,
-    Type,
     TypeVar,
-    Union,
     cast,
-    overload,
     no_type_check,
+    overload,
 )
 
-from theine_core import ClockProCore, LruCore, TlfuCore
-from typing_extensions import ParamSpec, Protocol, Concatenate
+from theine_core import TlfuCore, spread
+from typing_extensions import Concatenate, ParamSpec, Protocol
 
-from theine.exceptions import InvalidTTL
-from theine.models import CacheStats
+from theine.models import KT, VT, CacheStats, Entry
+from theine.striped_buffer import StripedBuffer
+from theine.utils import round_up_power_of_2
+from theine.write_buffer import WriteBuffer
 
 S = TypeVar("S", contravariant=True)
 P = ParamSpec("P")
-R = TypeVar("R", covariant=True, bound=Any)
-if TYPE_CHECKING:
-    from functools import _Wrapped
 
 sentinel = object()
 
-
-class KeyGen:
-    def __init__(self) -> None:
-        self.counter = itertools.count()
-        self.hk: Dict[Hashable, int] = {}
-        self.kh: Dict[int, Hashable] = {}
-
-    def gen(self, input: Hashable) -> str:
-        id = self.hk.get(input, None)
-        if id is None:
-            id = next(self.counter)
-            self.hk[input] = id
-            self.kh[id] = input
-        return f"_auto:{id}"
-
-    def remove(self, key: str) -> None:
-        h = self.kh.pop(int(key.replace("_auto:", "")), None)
-        if h is not None:
-            self.hk.pop(h, None)
-
-    def len(self) -> int:
-        return len(self.hk)
+_maintainer_loop = asyncio.new_event_loop()
 
 
-class Core(Protocol):
-    def __init__(self, size: int): ...
-
-    def set(self, key: str, ttl: int) -> Tuple[int, Optional[int], Optional[str]]: ...
-
-    def remove(self, key: str) -> Optional[int]: ...
-
-    def access(self, key: str) -> Optional[int]: ...
-
-    def advance(
-        self,
-        cache: List[Any],
-        sentinel: Any,
-        kh: Dict[int, Hashable],
-        hk: Dict[Hashable, int],
-    ) -> None: ...
-
-    def clear(self) -> None: ...
-
-    def len(self) -> int: ...
+def _maintance() -> None:
+    asyncio.set_event_loop(_maintainer_loop)
+    _maintainer_loop.run_forever()
 
 
-class ClockProCoreP(Protocol):
-    def __init__(self, size: int): ...
-
-    def set(
-        self, key: str, ttl: int
-    ) -> Tuple[int, Optional[int], Optional[int], Optional[str]]: ...
-
-    def remove(self, key: str) -> Optional[int]: ...
-
-    def access(self, key: str) -> Optional[int]: ...
-
-    def advance(
-        self,
-        cache: List[Any],
-        sentinel: Any,
-        kh: Dict[int, Hashable],
-        hk: Dict[Hashable, int],
-    ) -> None: ...
-
-    def clear(self) -> None: ...
-
-    def len(self) -> int: ...
-
-
-CORES: Dict[str, Union[Type[Core], Type[ClockProCoreP]]] = {
-    "tlfu": TlfuCore,
-    "lru": LruCore,
-    "clockpro": ClockProCore,
-}
+_maintainer_thread = Thread(target=_maintance, daemon=True)
+_maintainer_thread.start()
 
 
 @dataclass
@@ -124,7 +58,9 @@ class EventData:
 # https://github.com/python/cpython/issues/90780
 # use event to protect from thundering herd
 class CachedAwaitable:
-    def __init__(self, awaitable: Awaitable[Any], on_error: Callable[[BaseException], None]) -> None:
+    def __init__(
+        self, awaitable: Awaitable[Any], on_error: Callable[[BaseException], None]
+    ) -> None:
         self.awaitable = awaitable
         self.future: Optional[Awaitable[Any]] = None
         self.result = sentinel
@@ -163,8 +99,8 @@ class Key:
         self.event = Event()
 
 
-class Cached(Protocol[S, P, R]):
-    _cache: "Cache"
+class Cached(Protocol[S, P, VT]):
+    _cache: "Cache[Hashable, VT]"
 
     @overload
     def key(self, fn: Callable[P, Hashable]) -> None: ...
@@ -173,28 +109,30 @@ class Cached(Protocol[S, P, R]):
     def key(self, fn: Callable[Concatenate[S, P], Hashable]) -> None: ...
 
     @overload
-    def __call__(self, _arg_first: S, *args: P.args, **kwargs: P.kwargs) -> R: ...
+    def __call__(self, _arg_first: S, *args: P.args, **kwargs: P.kwargs) -> VT: ...
 
     @overload
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> VT: ...
+
+    def cache_stats(self) -> CacheStats: ...
 
 
 @no_type_check
 def Wrapper(
     fn: Callable,
-    timeout: Optional[timedelta],
+    ttl: Optional[timedelta],
     cache: "Cache",
     typed: bool,
-    lock: bool,
+    is_async: bool,
 ):
     _key_func = None
     _events = {}
     _func = fn
     _cache = cache
-    _timeout = timeout
+    _ttl = ttl
     _typed = typed
     _auto_key = True
-    _lock = lock
+    _is_async = is_async
 
     def key(fn) -> None:
         nonlocal _key_func
@@ -202,41 +140,30 @@ def Wrapper(
         _key_func = fn
         _auto_key = False
 
+    def cache_stats() -> CacheStats:
+        return _cache.stats()
+
     def fetch(*args, **kwargs):
         if _auto_key:
             key = _make_key(args, kwargs, _typed)
         else:
             key = _key_func(*args, **kwargs)
 
-        if inspect.iscoroutinefunction(fn):
-            result = _cache.get(key, sentinel)
-            if result is sentinel:
-                result = CachedAwaitable(_func(*args, **kwargs), lambda _: _cache.delete(key))
-                _cache.set(key, result, _timeout)
+        if _is_async:
+            result, ok = _cache.get(key)
+            if not ok:
+                result = CachedAwaitable(
+                    _func(*args, **kwargs), lambda _: _cache.delete(key)
+                )
+                _cache.set(key, result, _ttl)
             return result
 
-        data = _cache.get(key, sentinel)
-        if data is not sentinel:
-            return data
-        if _lock:
-            event = EventData(Event(), None)
-            ve = _events.setdefault(key, event)
-            if ve is event:
-                result = _func(*args, **kwargs)
-                event.data = result
-                _events.pop(key, None)
-                _cache.set(key, result, _timeout)
-                event.event.set()
-            else:
-                ve.event.wait()
-                result = ve.data
-        else:
-            result = _func(*args, **kwargs)
-            _cache.set(key, result, _timeout)
-        return result
+        return _cache._get_or_compute(key, lambda: fn(*args, **kwargs))
 
     fetch._cache = _cache
+    _cache.with_loader(fn, ttl)
     fetch.key = key
+    fetch.cache_stats = cache_stats
     return fetch
 
 
@@ -246,34 +173,195 @@ class Memoize:
     is also the recommended mode. You must specify the key function manually. Second one is auto-key mode,
     Theine will generate a key for you based on your function inputs.
 
-    :param cache: cache instance from Cache class.
-    :param timeout: timedelta to store the function result. Default is None which means no expiration.
+    :param size: cache size.
+    :param ttl: timedelta to store the function result. Default is None which means no expiration.
     :param typed: Only valid with auto-key mode. If typed is set to true,
         function arguments of different types will be cached separately.
         If typed is false, the implementation will usually regard them as equivalent calls and only cache
         a single result. (Some types such as str and int may be cached separately even when typed is false.)
-    :param lock: Cocurrent requests to same data will only fetch from source once. Default is False and
-        only make sense if you are using multitheads and want to avoid thundering herd problem.
+    :param nolock: disables thread locking for get and set operations. Defaults to False. Enable this only if your code does not use multi-threading.
     """
 
     def __init__(
         self,
-        cache: "Cache",
-        timeout: Optional[timedelta],
+        size: int,
+        ttl: Optional[timedelta],
         typed: bool = False,
-        lock: bool = False,
+        nolock: bool = False,
     ):
-        self.cache = cache
-        self.timeout = timeout
+        self.cache = Cache[Hashable, Any](size, nolock)
+        self.ttl = ttl
         self.typed = typed
-        self.lock = lock
 
-    def __call__(self, fn: Callable[Concatenate[S, P], R]) -> Cached[S, P, R]:
-        wrapper = Wrapper(fn, self.timeout, self.cache, self.typed, self.lock)
-        return cast(Cached[S, P, R], update_wrapper(wrapper, fn))
+    def __call__(self, fn: Callable[Concatenate[S, P], VT]) -> Cached[S, P, VT]:
+        wrapper = Wrapper(
+            fn, self.ttl, self.cache, self.typed, inspect.iscoroutinefunction(fn)
+        )
+        return cast(Cached[S, P, VT], update_wrapper(wrapper, fn))
 
 
-class Cache:
+class Shard(Generic[KT, VT]):
+
+    def __init__(self, nolock: bool) -> None:
+        self._map: Dict[KT, Entry[VT]] = {}
+        # key map is used to find evicted entries in _map because policy returns hashed key value
+        self._key_map: Dict[int, KT] = {}
+        self._mutex = Lock()
+        self._hits = itertools.count()
+        self._misses = itertools.count()
+        self._nolock = nolock
+
+    def get(self, key: KT, key_hash: int) -> Tuple[Optional[VT], bool]:
+        try:
+            # https://docs.python.org/3/howto/free-threading-python.html
+            # It’s recommended to use the threading.Lock or other synchronization primitives instead of relying on the internal locks of built-in types, when possible.
+            self._nolock or self._mutex.acquire()
+            entry = self._map[key]
+            if entry.expire > 0 and entry.expire <= time.monotonic_ns():
+                next(self._misses)
+                self._map.pop(key, sentinel)
+                self._key_map.pop(key_hash, sentinel)
+                return (None, False)
+            else:
+                next(self._hits)
+                return (entry.value, True)
+        except KeyError:
+            next(self._misses)
+            return (None, False)
+        except Exception as err:
+            raise err
+        finally:
+            if not self._nolock:
+                self._mutex.release()
+
+    # used only in the cache decorator. self._hits and self._misses are not updated here, as those values are recorded when entering the decorator
+    def _get_nolock(self, key: KT, key_hash: int) -> Tuple[Optional[VT], bool]:
+        try:
+            entry = self._map[key]
+            if entry.expire > 0 and entry.expire <= time.monotonic_ns():
+                self._map.pop(key, sentinel)
+                self._key_map.pop(key_hash, sentinel)
+                return (None, False)
+            else:
+                return (entry.value, True)
+        except KeyError:
+            return (None, False)
+
+    def _set_nolock(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
+        # remove exist first if key hash collision
+        # not policy update because same hash means same key in policy
+        try:
+            removed = self._key_map.pop(key_hash)
+        except KeyError:
+            pass
+        else:
+            self._map.pop(removed)
+
+        expire = 0
+        if ttl > 0:
+            expire = time.monotonic_ns() + ttl
+        self._map[key] = Entry(value, expire)
+        self._key_map[key_hash] = key
+        return True
+
+    def set(self, key: KT, key_hash: int, value: VT, ttl: int) -> bool:
+        try:
+            self._nolock or self._mutex.acquire()
+            # remove exist first if key hash collision
+            # not policy update because same hash means same key in policy
+            try:
+                removed = self._key_map.pop(key_hash)
+            except KeyError:
+                pass
+            else:
+                self._map.pop(removed)
+
+            expire = 0
+            if ttl > 0:
+                expire = time.monotonic_ns() + ttl
+            self._map[key] = Entry(value, expire)
+            self._key_map[key_hash] = key
+            return True
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
+
+    def set_ttl(self, key: KT, ttl: int) -> None:
+        try:
+            self._nolock or self._mutex.acquire()
+            try:
+                entry = self._map[key]
+            except KeyError:
+                return
+            else:
+                expire = 0
+                if ttl > 0:
+                    expire = time.monotonic_ns() + ttl
+                entry.expire = expire
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
+
+    def remove(self, key_hash: int) -> bool:
+        try:
+            self._nolock or self._mutex.acquire()
+            try:
+                key = self._key_map.pop(key_hash)
+            except KeyError:
+                return False
+            else:
+                try:
+                    del self._map[key]
+                except KeyError:
+                    return False
+                else:
+                    return True
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
+
+    # check expire before remove, used in timer wheel expire only,
+    # set(key, ttl1) -> ttl1_sync_to_policy -> set(key, ttl2) -> ttl1 expired -> key_removed -> ttl2_sync_to_policy
+    # the key is already removed when policy aware ttl changed, make ttl2 no effect
+    def remove_expired(self, key_hash: int) -> None:
+        try:
+            self._nolock or self._mutex.acquire()
+            try:
+                key = self._key_map[key_hash]
+            except KeyError:
+                pass
+            else:
+                try:
+                    self._map[key]
+                except KeyError:
+                    pass
+                else:
+                    # expired, removed
+                    self._key_map.pop(key_hash, sentinel)
+                    self._map.pop(key, sentinel)
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._mutex.release()
+
+    def clear(self) -> None:
+        with self._mutex:
+            self._map.clear()
+            self._key_map.clear()
+
+    def __len__(self) -> int:
+        with self._mutex:
+            return len(self._map)
+
+
+class Cache(Generic[KT, VT]):
     """
     Create new Theine cache store and use API with this class. This class is not thread-safe.
 
@@ -281,184 +369,229 @@ class Cache:
     :param size: cache size.
     """
 
-    def __init__(self, policy: str, size: int):
-        self._cache: List[Any] = [sentinel] * (size + 500)
-        self.core = CORES[policy](size)
-        if policy == "clockpro":
-            # clockpro use 2x metadata space, so need to initial 2x space for cache list
-            # half of cache list will be sentinel(test page in clock pro)
-            self._cache = [sentinel] * (2 * size + 500)
-            setattr(self, "set", self._set_clockpro)
-        self.key_gen = KeyGen()
+    _loader: Optional[Callable[[KT], VT]]
+
+    _ttl: Optional[timedelta]
+
+    def __init__(self, size: int, nolock: bool = False):
+        if bool(sysconfig.get_config_var("Py_GIL_DISABLED")):
+            nolock = False
+        shard_count = round_up_power_of_2(os.cpu_count() or 4)
+
+        if shard_count < 16:
+            shard_count = 16
+        elif shard_count > 128:
+            shard_count = 128
+
+        self._shards: Tuple[Shard[KT, VT], ...] = tuple(
+            [Shard(nolock) for _ in range(shard_count)]
+        )
+        self.core = TlfuCore(size)
         self._closed = False
-        self._maintainer = Thread(target=self.maintenance, daemon=True)
-        self._maintainer.start()
         self._total = 0
         self._hit = 0
         self.max_size = size
+        self._shard_count = shard_count
+        self.max_int64 = (1 << 64) - 1
+        # core is single thread, all core operation must hold this mutex
+        self._core_mutex = Lock()
+        self._read_buffer = StripedBuffer(self._drain_read, nolock)
+        self._write_buffer = WriteBuffer(
+            self._drain_write, self._remove_keys, self._core_mutex, nolock
+        )
+        self._maintainer = asyncio.run_coroutine_threadsafe(
+            self.maintenance(), loop=_maintainer_loop
+        )
+        self._events: Dict[KT, EventData] = {}
+        self._nolock = nolock
 
     def __len__(self) -> int:
-        return self.core.len()
+        total = 0
+        for shard in self._shards:
+            total += len(shard)
+        return total
 
-    def get(self, key: Hashable, default: Any = None) -> Any:
+    def with_loader(self, loader: Callable[[KT], VT], ttl: Optional[timedelta]) -> None:
+        self._loader = loader
+        self._ttl = ttl
+
+    def get(self, key: KT) -> Tuple[Optional[VT], bool]:
         """
         Retrieve data with cache key. If given key is not in cache, return default value.
 
         :param key: key hashable, use str/int for best performance.
         :param default: returned value if key is not found in cache, default None.
         """
-        self._total += 1
-        auto_key = False
-        key_str = ""
-        if isinstance(key, str):
-            key_str = key
-        elif isinstance(key, int):
-            key_str = f"{key}"
-        else:
-            key_str = self.key_gen.gen(key)
-            auto_key = True
+        kh = spread(hash(key))
+        idx = kh & (self._shard_count - 1)
+        (v, ok) = self._shards[idx].get(key, kh)
+        if ok:
+            self._read_buffer.add(kh)
+        return (v, ok)
 
-        index = self.core.access(key_str)
-        if index is None:
-            if auto_key:
-                self.key_gen.remove(key_str)
-            return default
-
-        self._hit += 1
-        return self._cache[index]
-
-    def _access(self, key: Hashable, ttl: Optional[timedelta] = None) -> None:
-        key_str = ""
-        if isinstance(key, str):
-            key_str = key
-        elif isinstance(key, int):
-            key_str = f"{key}"
-        else:
-            key_str = self.key_gen.gen(key)
-
-        ttl_ns = None
+    def _ttl_nano(self, ttl: Optional[timedelta]) -> int:
+        ttl_ns = 0
         if ttl is not None:
             seconds = ttl.total_seconds()
             if seconds == 0:
                 raise Exception("ttl must be positive")
             ttl_ns = int(seconds * 1e9)
-        self.core.set(key_str, ttl_ns or 0)
+        return ttl_ns
 
-    def set(
-        self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
-    ) -> Optional[str]:
-        """
-        Add new data to cache. If the key already exists, value will be overwritten.
+    def _get_or_compute(self, key: KT, fn: Callable[[], VT]) -> VT:
+        kh = spread(hash(key))
+        shard = self._shards[kh & (self._shard_count - 1)]
+        (v, ok) = shard.get(key, kh)
+        if ok:
+            self._read_buffer.add(kh)
+            return cast(VT, v)
 
-        :param key: key hashable, use str/int for best performance.
-        :param value: cached value.
-        :param ttl: timedelta to store the data. Default is None which means no expiration. Value smaller than 1 second will round to 1 second. Set a negative value will panic.
-        """
-        self.core = cast(Core, self.core)
-        key_str = ""
-        if isinstance(key, str):
-            key_str = key
-        elif isinstance(key, int):
-            key_str = f"{key}"
+        # nolock means single threading mode,
+        # where cache stampe problem not exists
+        if self._nolock:
+            r = fn()
+            ttl_ns = self._ttl_nano(self._ttl)
+            shard._set_nolock(key, kh, r, ttl_ns)
+            self._write_buffer.add(kh, ttl_ns)
+            return r
+
+        event = EventData(Event(), None)
+        with shard._mutex:
+            # check key exists again, because other threads might set the value already
+            (v, ok) = shard._get_nolock(key, kh)
+            if ok:
+                self._read_buffer.add(kh)
+                return cast(VT, v)
+            ve = self._events.setdefault(key, event)
+        # the shard mutex is released when computing value for the key,
+        # so following get on same key can wait for the event.
+        # it's safe to do so because this method is only used for decorator,
+        # and user can not delete/update cache manually when using decorator
+        if ve is event:
+            result_sync = fn()
+            event.data = result_sync
+            ttl_ns = self._ttl_nano(self._ttl)
+            with shard._mutex:
+                shard._set_nolock(key, kh, result_sync, ttl_ns)
+                self._events.pop(key, None)
+            event.event.set()
+            self._write_buffer.add(kh, ttl_ns)
         else:
-            key_str = self.key_gen.gen(key)
+            ve.event.wait()
+        result_sync = cast(VT, ve.data)
+        return result_sync
 
-        ttl_ns = None
-        if ttl is not None:
-            seconds = ttl.total_seconds()
-            if seconds <= 0:
-                raise InvalidTTL("ttl must be positive")
-            ttl_ns = int(seconds * 1e9)
-        # 0 means no ttl
-        index, evicted_index, evicted_key = self.core.set(key_str, ttl_ns or 0)
-        self._cache[index] = value
-        if evicted_index is not None:
-            self._cache[evicted_index] = sentinel
-            if evicted_key and evicted_key[:6] == "_auto:":
-                self.key_gen.remove(evicted_key)
-            return evicted_key
-        return None
+    def _get_loading(self, key: KT) -> Tuple[Optional[VT], bool]:
+        if self._loader is None:
+            raise Exception("loader function is None")
 
-    # clockpro core set has different set ouput signature
-    def _set_clockpro(
-        self, key: Hashable, value: Any, ttl: Optional[timedelta] = None
-    ) -> Optional[str]:
-        """
-        Add new data to cache. If the key already exists, value will be overwritten.
-
-        :param key: key hashable, use str/int for best performance.
-        :param value: cached value.
-        :param ttl: timedelta to store the data. Default is None which means no expiration. Value smaller than 1 second will round to 1 second. Set a negative value will panic.
-        """
-        self.core = cast(ClockProCore, self.core)
-        key_str = ""
-        if isinstance(key, str):
-            key_str = key
-        elif isinstance(key, int):
-            key_str = f"{key}"
-        else:
-            key_str = self.key_gen.gen(key)
-
-        ttl_ns = None
-        if ttl is not None:
-            # min res 1 second
-            seconds = ttl.total_seconds()
-            if seconds <= 0:
-                raise InvalidTTL("ttl must be positive")
-            ttl_ns = int(seconds * 1e9)
-        index, test_index, evicted_index, evicted_key = self.core.set(
-            key_str, ttl_ns or 0
+        return (
+            self._get_or_compute(
+                key, cast(Callable[[], VT], lambda: self._loader(key))
+            ),
+            True,
         )
-        self._cache[index] = value
-        if test_index is not None:
-            self._cache[test_index] = sentinel
-        if evicted_index is not None:
-            self._cache[evicted_index] = sentinel
-            if evicted_key and evicted_key[:6] == "_auto:":
-                self.key_gen.remove(evicted_key)
-            return evicted_key
-        return None
 
-    def delete(self, key: Hashable) -> bool:
+    def _drain_read(self, keys: List[int]) -> None:
+        try:
+            self._nolock or self._core_mutex.acquire()
+            self.core.access(keys)
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._core_mutex.release()
+
+    def _drain_write(self, entries: List[Tuple[int, int]]) -> List[int]:
+        return self.core.set(entries)
+
+    def _remove_keys(self, keys: List[int]) -> None:
+        for key in keys:
+            self._shards[key & (self._shard_count - 1)].remove(key)
+
+    # send writer buffer to policy immediately, used in test and clear
+    def _force_drain_write(self) -> None:
+        try:
+            self._nolock or self._core_mutex.acquire()
+            wb = self._write_buffer.buffer[: self._write_buffer.tail]
+            if len(wb) > 0:
+                evicted = self.core.set(wb)
+                for key in evicted:
+                    self._shards[key & (self._shard_count - 1)].remove(key)
+                self._write_buffer.tail = 0
+        except Exception as e:
+            raise e
+        finally:
+            if not self._nolock:
+                self._core_mutex.release()
+
+    # used in Django adapter touch method, sets a new expiration for a key
+    def _access(self, key: KT, ttl: Optional[timedelta] = None) -> None:
+        kh = spread(hash(key))
+        ttl_ns = self._ttl_nano(ttl)
+        self._shards[kh & (self._shard_count - 1)].set_ttl(key, ttl_ns)
+        self._write_buffer.add(kh, ttl_ns)
+
+    def set(self, key: KT, value: VT, ttl: Optional[timedelta] = None) -> None:
+        """
+        Add new data to cache. If the key already exists, value will be overwritten.
+
+        :param key: key hashable, use str/int for best performance.
+        :param value: cached value.
+        :param ttl: timedelta to store the data. Default is None which means no expiration. Value smaller than 1 second will round to 1 second. Set a negative value will panic.
+        """
+        kh = spread(hash(key))
+
+        ttl_ns = self._ttl_nano(ttl)
+
+        self._shards[kh & (self._shard_count - 1)].set(key, kh, value, ttl_ns)
+        self._write_buffer.add(kh, ttl_ns)
+
+    def delete(self, key: KT) -> bool:
         """
         Remove key from cache. Return True if given key exists in cache and been deleted.
 
         :param key: key hashable, use str/int for best performance.
         """
-        key_str = ""
-        if isinstance(key, str):
-            key_str = key
-        elif isinstance(key, int):
-            key_str = f"{key}"
-        else:
-            key_str = self.key_gen.gen(key)
-            self.key_gen.remove(key_str)
+        kh = spread(hash(key))
+        success = self._shards[kh & (self._shard_count - 1)].remove(kh)
+        self._write_buffer.add(kh, -1)
+        return success
 
-        index = self.core.remove(key_str)
-        if index is not None:
-            self._cache[index] = sentinel
-            return True
-        return False
-
-    def maintenance(self) -> None:
+    async def maintenance(self) -> None:
         """
         Remove expired keys.
         """
-        while not self._closed:
-            self.core.advance(self._cache, sentinel, self.key_gen.kh, self.key_gen.hk)
-            time.sleep(0.5)
+        while True:
+            evicted: List[int] = []
+            with self._core_mutex:
+                if self._closed:
+                    return
+                evicted = self.core.advance()
+            for key in evicted:
+                self._shards[key & (self._shard_count - 1)].remove_expired(key)
+            await asyncio.sleep(1)
 
     def clear(self) -> None:
-        self.core.clear()
-        self._cache = [sentinel] * len(self._cache)
+        self._force_drain_write()
+        with self._core_mutex:
+            self.core.clear()
+        for shard in self._shards:
+            shard.clear()
 
     def close(self) -> None:
-        self._closed = True
-        self._maintainer.join()
+        with self._core_mutex:
+            self._closed = True
 
     def __del__(self) -> None:
         self.clear()
         self.close()
 
     def stats(self) -> CacheStats:
-        return CacheStats(self._total, self._hit)
+        misses = 0
+        hits = 0
+        for shard in self._shards:
+            with shard._mutex:
+                hits += next(shard._hits)
+                misses += next(shard._misses)
+        return CacheStats(hits + misses, hits)

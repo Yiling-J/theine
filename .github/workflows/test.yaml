@@ -21,37 +21,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: [ "3.9", "3.10", "3.11", "3.12", "3.13", "3.13.3t"]
 
     steps:
       - uses: "actions/checkout@v3"
-      - uses: "actions/setup-python@v4"
+      - uses: "actions/setup-python@v5"
         with:
-          python-version: "${{ matrix.python-version }}"
-      - name: Install Poetry
-        uses: abatilo/actions-poetry@v2
+          python-version: ${{ matrix.python-version }}
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
         with:
-          version: 1.3
-      - name: Setup Poetry
-        run: "poetry config virtualenvs.in-project true"
-      - name: Cache Deps
-        uses: actions/cache@v4
-        id: cached-poetry-dependencies
-        with:
-          path: .venv
-          key: python-${{ matrix.python-version }}-pydeps-${{ hashFiles('**/poetry.lock') }}
-      - name: "Install Dependencies"
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: "poetry install --no-interaction --no-root --all-extras"
-      - name: "Run Lint"
-        run: "make lint"
-      - name: "Mypy api success"
-        run: "make lint-pass"
-      - name: "Mypy api failed"
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+      - name: Install Dependencies
+        run: uv sync --locked --all-extras --dev
+      - name: Run Lint
+        run: make lint
+      - name: Mypy Success
+        run: make lint-pass
+      - name: Mypy Failed
         run: |
           error_count=$(make lint-failed 2>&1 | grep -c 'error:')
-          [ "$error_count" -eq 4 ]
-      - name: "Run Tests"
+          [ "$error_count" -eq 8 ]
+      - name: Run Tests
         env:
           CI: "TRUE"
-        run: "make test"
+        run: make test
