@@ -70,6 +70,7 @@ The improved adaptive cache eviction policy automatically switches between LRU a
 
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Design](#design)
 - [API](#api)
 - [Metadata Memory Overhead](#metadata-memory-overhead)
 - [Benchmarks](#benchmarks)
@@ -84,6 +85,20 @@ Python 3.9+
 ```
 pip install theine
 ```
+## Design
+
+Theine consists of two main components: a core cache policy implemented in Rust, and a Python interface that manages the storage of cached key-value pairs. The Python layer uses the Rust policy to ensure that the total size of the cache does not exceed its maximum limit and evicts entries based on the policy's decisions.
+
+The Rust core and the Python layer are decoupled through the use of key hashes(int). The core operates solely on key hashes, without any direct knowledge of Python objects. This separation simplifies the core implementation and avoids the complexity of handling Python-specific behavior in Rust.
+
+All interactions with the Rust core are protected by a mutex, meaning there is no concurrency within the core itself. This is an intentional design decision: since Rust is significantly faster than Python, adding concurrency at the core level would introduce unnecessary complexity with little performance gain.
+
+On the Python side, key-value pairs are stored in a sharded dictionary. Each shard has its own mutex (currently a standard threading `Lock`) to improve scalability. A reader-writer lock is not used because Python does not provide one in the standard library.
+
+Each shard actually maintains two dictionaries:
+
+1. The primary key-value dictionary, used to retrieve values directly by key.
+2. A keyhash-to-key dictionary, used to map the hashes (which are what the Rust core operates on) back to the original keys. This is necessary because when the Rust core decides to evict an item based on its hash, the Python side must be able to identify and remove the corresponding key from the primary dictionary.
 
 ## API
 
