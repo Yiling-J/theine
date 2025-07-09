@@ -47,7 +47,7 @@ New:
 ```python
 cache.set("key", {"foo": "bar"}, ttl=timedelta(seconds=100))
 
-@Memoize(Cache("tlfu", 10000), ttl=timedelta(seconds=100))
+@Memoize(10000, ttl=timedelta(seconds=100))
 ```
 
 #### Thread Safety by Default
@@ -110,7 +110,6 @@ Key should be a **Hashable** object, and value can be any **Python object**.
 from theine import Cache
 from datetime import timedelta
 
-# tlfu is the eviction policy, Theine provide 3 policies lru/tlfu/clockpro
 cache = Cache(10000)
 # without default, return None on miss
 v = cache.get("key")
