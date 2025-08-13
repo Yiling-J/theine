@@ -32,6 +32,30 @@ cache = Cache(10000)
 ...
 ```
 
+#### Making `Cache.get` return explicit existence status
+
+The `Cache.get` method now returns a tuple `(value, exists)` instead of only the value. This makes it explicit whether the requested key was found in the cache. In the old API, a missing key returned `None` (or a provided default value), which could cause ambiguity if `None` was also a valid cached value.
+
+Old:
+
+```python
+# Without default, returns None if key is missing
+v = cache.get("key")
+
+# With default, returns default if key is missing
+sentinel = object()
+v = cache.get("key", sentinel)
+```
+
+New:
+
+```python
+# Returns (value, exists), where exists is True if the key was found
+v, ok = cache.get("key")
+if ok:
+    ...
+```
+
 #### Renaming `timeout` to `ttl`
 The `timeout` parameter in the `Cache` class’s `set` method has been renamed to `ttl` (Time-to-Live). This is more commonly used in caching and is clearer in meaning. In V1, the term `timeout` was used for consistency with Django, but `ttl` is now the preferred naming convention in V2. The Django adapter settings still uses `TIMEOUT` for compatibility.
 
@@ -111,12 +135,8 @@ from theine import Cache
 from datetime import timedelta
 
 cache = Cache(10000)
-# without default, return None on miss
-v = cache.get("key")
-
-# with default, return default on miss
-sentinel = object()
-v = cache.get("key", sentinel)
+# get value by key, returns (value, exists) where exists indicates if the key was found
+v, ok = cache.get("key")
 
 # set with ttl
 cache.set("key", {"foo": "bar"}, timedelta(seconds=100))
