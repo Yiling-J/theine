@@ -6,7 +6,7 @@ High performance in-memory cache inspired by [Caffeine](https://github.com/ben-m
 - High hit ratio with adaptive [W-TinyLFU](https://arxiv.org/pdf/1512.00727.pdf) eviction policy
 - Expired data are removed automatically using [hierarchical timer wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
 - Fully typed
-- Thread-safe with Free-Threading support (tested on Python 3.13.3t)
+- Thread-safe with Free-Threading support (tested on Python 3.13.6t)
 - Django cache backend
 
 ## Theine V2 Migration Guide
