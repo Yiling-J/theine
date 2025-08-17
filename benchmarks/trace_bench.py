@@ -3,6 +3,7 @@ import gzip
 import struct
 from datetime import timedelta
 from random import randint
+from threading import Thread
 from typing import Callable, Iterator, List
 
 import matplotlib.pyplot as plt
@@ -148,22 +149,31 @@ def bench_cachetools(
     return hr
 
 
-def infinit_run(cap: int):
+def _infinit_run(cache: Cache[int, int]):
     z = Zipf(1.001, 10, 100000000)
-    client = Cache("tlfu", cap)
     count = 0
-    hit = 0
     while True:
-        key = f"key:{z.get()}"
-        data = client.get(key, None)
-        if data is None:
-            client.set(key, key, timedelta(seconds=randint(30, 20000)))
+        key = z.get()
+        data, exists = cache.get(key)
+        if not exists:
+            cache.set(key, key, timedelta(seconds=randint(30, 20000)))
         else:
-            hit += 1
             assert data == key
         count += 1
         if count % 100000 == 0:
-            print(f"finish {count // 100000}, hit ratio: {hit / count}")
+            print(".", end="", flush=True)
+
+
+def infinit_run_parallel(cap: int):
+    cache = Cache(500000)
+
+    threads = []
+    for _ in range(6):
+        thread = Thread(target=_infinit_run, args=[cache])
+        thread.start()
+        threads.append(thread)
+    for t in threads:
+        t.join()
 
 
 def init_plot(title):
@@ -219,9 +229,18 @@ def bench_and_plot_parallel(caps, key_gens, name):
     futures = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         for cap in caps:
-            futures[executor.submit(bench_theine, cap, key_gens, name)] = ("theine", cap)
-            futures[executor.submit(bench_cachetools, "LRU", cap, key_gens, name)] = ("lru", cap)
-            futures[executor.submit(bench_cachetools, "FIFO", cap, key_gens, name)] = ("fifo", cap)
+            futures[executor.submit(bench_theine, cap, key_gens, name)] = (
+                "theine",
+                cap,
+            )
+            futures[executor.submit(bench_cachetools, "LRU", cap, key_gens, name)] = (
+                "lru",
+                cap,
+            )
+            futures[executor.submit(bench_cachetools, "FIFO", cap, key_gens, name)] = (
+                "fifo",
+                cap,
+            )
 
         m = {}
         for future in concurrent.futures.as_completed(futures):
@@ -266,7 +285,8 @@ def bench_and_plot_parallel(caps, key_gens, name):
     ax.legend()
     fig.savefig(f"benchmarks/{name.lower()}.png", dpi=200)
 
-# infinit_run(50000)
+
+# infinit_run_parallel(50000)
 
 bench_and_plot(
     [500, 1000, 2000, 5000, 10_000, 20_000, 40_000, 80_000], [zipf_key_gen], "Zipf"
