@@ -105,6 +105,8 @@ The improved adaptive cache eviction policy automatically switches between LRU a
 ## Requirements
 Python 3.9+
 
+For use with **free-threaded Python**, the recommended version is **Python 3.13.6+**. See https://github.com/python/cpython/issues/133136 for more details.
+
 ## Installation
 ```
 pip install theine
