@@ -14,7 +14,6 @@ classifiers = [
 dependencies = [
     "typing-extensions>=4.4.0,<5",
     "theine-core>=2.0.0,<3",
-    "zstandard>=0.24.0.dev0",
 ]
 
 [dependency-groups]

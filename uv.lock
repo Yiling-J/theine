@@ -1205,7 +1205,6 @@ source = { editable = "." }
 dependencies = [
     { name = "theine-core" },
     { name = "typing-extensions" },
-    { name = "zstandard" },
 ]
 
 [package.dev-dependencies]
@@ -1238,7 +1237,6 @@ dev = [
 requires-dist = [
     { name = "theine-core", specifier = ">=2.0.0,<3" },
     { name = "typing-extensions", specifier = ">=4.4.0,<5" },
-    { name = "zstandard", git = "https://github.com/dpdani/python-zstandard.git?branch=feature%2F3.13t" },
 ]
 
 [package.metadata.requires-dev]
